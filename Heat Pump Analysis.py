@@ -243,7 +243,7 @@ def getDate(msg):
 def loadOilDeliveries(purchasesFile):
 
     # this was take from previous code tested using First Parish oil purchases
-    # input = open('/Users/Brad/Documents/Energy/FP energy audit/FP Oil Deliveries.txt')
+    # input = open('./Residential Profiles/FP Oil Deliveries.txt')
     global numDeliveries    
     numDeliveries = 0
     purchase_Vol.clear()
@@ -252,7 +252,13 @@ def loadOilDeliveries(purchasesFile):
     
     # read the purchases file
     
-    input = open(purchasesFile)
+    try:
+        input = open(purchasesFile,'r', encoding='latin-1')
+
+    except:
+        print("Unable to open input file")
+        return
+        
     test = input.read()
     lines = test.split('\n')
     
@@ -342,9 +348,9 @@ def initializeData():
 
     current_Heating_Year = 2003 # at the very least, current heating year
 
-    workingDirectory = '/Users/Brad/Documents/Energy/Heat Pump Technology/Tufts project/Python/'
-    # filename = '/Users/Brad/Documents/Energy/FP energy audit/FP Oil Deliveries.txt'
-    filename = 'Brockway Oil Deliveries.txt'
+    workingDirectory = './Residential Profiles/'
+    # filename = 'FP Oil Deliveries.txt'
+    filename = 'Default Oil Deliveries.txt'
     purchasesFile = workingDirectory + filename
     numDeliveries = loadOilDeliveries(purchasesFile)
     
@@ -358,8 +364,7 @@ def loadData():
 
     global HP_MAX
     # read the heat pump data file
-#    HeatPumpDataFile = '/Users/Brad/Documents/Energy/Heat Pump Technology/Tufts Project/Python/NEEP Heat Pump Data.txt'
-    workingDirectory = '/Users/Brad/Documents/Energy/Heat Pump Technology/Tufts project/Python/'
+    workingDirectory = './'
     filename = 'Cold Climate Air-Source Heat Pump Listing.txt'
     HeatPumpDataFile = workingDirectory + filename
     
@@ -518,7 +523,7 @@ def LoadTempDataRaw():
     oneHour = datetime.timedelta(0,0,0,0,0,1,0)
     
     # loop over files from these years
-    ClimaticDataPath = '/Users/Brad/Documents/Energy/Heat Pump Technology/Tufts Project/Python/KBED'
+    ClimaticDataPath = './Climate Data/KBED'
     for year in range(yearStart,yearEnd+1):
         filename = "%s-%i.txt" % (ClimaticDataPath, year) 
         print("Reading "+filename)
@@ -562,7 +567,7 @@ def LoadTempData():
     # Improvement would be to load from mesowest.utah.edu for the location specified
 
     # read the climatic data file
-    ClimaticDataFile = '/Users/Brad/Documents/Energy/Heat Pump Technology/Tufts Project/Python/Modified Temp data.txt'
+    ClimaticDataFile = './Superseded/Modified Temp data.txt'
     first = True
     LN = -1
     NextLN = 2
@@ -717,7 +722,7 @@ def doHeatPumpAnalysis(where,text):
     
 #    H = 13   #   the heat pump chosen
     LoadTempDataRaw()
-#    LoadTempData()
+#   LoadTempData()      # old version, reading from a spreadsheet file
     approxResistance()
     p = heatPumpPerformance(HPiD)
     outputData(HPiD)
@@ -1298,7 +1303,7 @@ def outputData(HPiD):
     # This routine outputs all results in the spreadsheet
     global last_Purchase
     
-    outputFile = '/Users/Brad/Documents/Energy/Heat Pump Technology/Tufts Project/Python/Heat Pump Analysis.txt'
+    outputFile = './Output Data/Heat Pump Analysis.txt'
     output = open(outputFile,'w')
     
     # Worksheets("Modified Temp Data").Activate
