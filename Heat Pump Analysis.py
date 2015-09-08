@@ -840,7 +840,8 @@ class BaselineHeatingPage(tk.Frame):
 def selHeatPump(H):
     global HPiD
     global firstPlot
-            
+
+    
     HPiD = H
 
     COPMax = []
@@ -912,6 +913,7 @@ def selHeatPump(H):
 class SelectHeatPumpPage(tk.Frame):
     def __init__(self,parent,controller):
         global HPiD
+        HPFilter = ['Ductless','Ducted','All']
 
         HPListIndex2ID = []
         
@@ -922,38 +924,36 @@ class SelectHeatPumpPage(tk.Frame):
         lb = tk.Listbox(self,selectmode=tk.SINGLE,height=15,width=50)
 #        scrollbar = Scrollbar(self)
 #        scrollbar.grid(row=1,column=2,rowspan=2,sticky=(N,W))   #pack( side = RIGHT, fill=Y )
-        HPType = StringVar()
-        HPType.set("Ductless")
-        rb1 = ttk.Radiobutton(self, text="Ductless", variable=HPType, value="Ductless",command=lambda: SetHPTypeFilter)
-        rb2 = ttk.Radiobutton(self, text="Ducted", variable=HPType, value="Ducted",command=lambda: SetHPTypeFilter)
-        rb3 = ttk.Radiobutton(self, text="Both", variable=HPType, value="All",command=lambda: SetHPTypeFilter)
-#        rb1.state
-        rb1.grid(row=1,column=0)
-        rb2.grid(row=1,column=1)
-        rb3.grid(row=1,column=2)
-#        rb1.select()
- #       rb2.deselect()
- #       rb3.deselect()
-        
+
+        HPType = IntVar()
+        HPType.set(0)
+                    
         def FillHPListBox(lb, filterVar):
+            lb.delete(0,lb.size())
+            filter = filterVar    # the string variable
+            filter = HPFilter[filter]
             for h in range(HP_MAX):
                 ductless = (part_Number[h]['Type'] == 'Ductless')
-                filter = filterVar.get() # the string variable
                 if ( (ductless and (filter=='Ductless' or filter=='All')) or ((not ductless) and (filter != 'Ductless'))) :
                     insertText = part_Number[h]['Manufacturer']+" Model "+part_Number[h]['Model']+" "+part_Number[h]['Type']
                     if part_Number[h]['Type'] == 'Ductless':
                         insertText+='-'+part_Number[h]['Zones']
                     lb.insert(h,insertText)
                     HPListIndex2ID.append(h)
-        
+
+        rb1 = tk.Radiobutton(self, text="Ductless", variable=HPType, value=0, command=lambda: FillHPListBox(lb,0))
+        rb2 = tk.Radiobutton(self, text="Ducted",   variable=HPType, value=1, command=lambda: FillHPListBox(lb,1))
+        rb3 = tk.Radiobutton(self, text="Both",     variable=HPType, value=2, command=lambda: FillHPListBox(lb,2))
+
+        rb1.grid(row=1,column=0)
+        rb2.grid(row=1,column=1)
+        rb3.grid(row=1,column=2)
+        rb1.invoke()
+
         lb.grid(row=2,column=0, rowspan=1,columnspan=3,sticky=(N))
-        FillHPListBox(lb, HPType)
         lb.activate(HPiD)
         
 #        scrollbar.config( command = lb.yview )
-        def SetHPTypeFilter():
-            filter = str(HPTypeFilter.get())
-            print (filter)
         
  
 #fig = plt.figure()
