@@ -47,53 +47,22 @@ import matplotlib.ticker as mticker
 
 import numpy as np
 
-
 # tkinter user interface library
 import tkinter as tk
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
 
-import ttkcalendar
-import tkSimpleDialog
+from CalendarDialog import *
+import AddDeliveryDlg
 
 from datetime import datetime, date, time
 from pylab import *
-
 
 LARGE_FONT = ("Verdana",20)
 NORM_FONT = ("Helvetica",16)
 SMALL_FONT = ("Helvetica",13)
 style.use("ggplot")
-
-#f = Figure(figsize=(10,6), dpi=100)
-#a = f.add_subplot(111)
-f = plt.figure()
-a = plt.subplot2grid((3,3), (0,0), rowspan=3, colspan=3)
-
-#f1 = Figure(figsize=(3,2), dpi=100)
-#a1 = f1.add_subplot(111)
-f1 = plt.figure()
-a1 = plt.subplot2grid((9,3), (0,0), rowspan = 4, colspan = 3)
-a1.set_ylabel('COP')
-a1.set_ylim(0.,5.)
-a1.set_autoscalex_on(False)
-a1.set_autoscaley_on(False)
-a1.set_xlim(-20.,60.)
-firstPlot = True
-
-
-#plt.grid(True)
-
-#f2 = plt.figure()
-
-a2 = plt.subplot2grid((9,3), (5,0), rowspan = 4, colspan = 3, sharex=a1)
-a2.set_ylabel('Capacity')
-a2.set_xlabel('Outdoor Temp (deg F)')
-a2.set_ylim(0.,50000.)
-a2.set_autoscalex_on(False)
-a2.set_autoscaley_on(False)
-plt.grid(True)
 
 # globals
 
@@ -179,6 +148,7 @@ t_End = 0
 COP_Ave = [] # (1 To SITE_DATA_MAX, 1 To HP_MAX) As Single 
 
 # Customer Specific parameters
+fuelDeliveryHeader = ""
 purchase_Date = []
 purchase_Vol = []
 purchase_Cost = []
@@ -210,20 +180,34 @@ BaseUnitsByYear = []
 BaseCostByYear = []
 
 updateGraph = False
+#f = Figure(figsize=(10,6), dpi=100)
+#a = f.add_subplot(111)
+f = plt.figure()
+a = plt.subplot2grid((3,3), (0,0), rowspan=3, colspan=3)
 
-class CalendarDialog(tkSimpleDialog.Dialog):
-    """Dialog box that displays a calendar and returns the selected date"""
-    def body(self, master):
-        self.calendar = ttkcalendar.Calendar(master)
-        self.calendar.pack()
+#f1 = Figure(figsize=(3,2), dpi=100)
+#a1 = f1.add_subplot(111)
+f1 = plt.figure()
+a1 = plt.subplot2grid((9,3), (0,0), rowspan = 4, colspan = 3)
+a1.set_ylabel('COP')
+a1.set_ylim(0.,5.)
+a1.set_autoscalex_on(False)
+a1.set_autoscaley_on(False)
+a1.set_xlim(-20.,60.)
+firstPlot = True
 
-    def apply(self):
-        self.result = self.calendar.selection
+a2 = plt.subplot2grid((9,3), (5,0), rowspan = 4, colspan = 3, sharex=a1)
+a2.set_ylabel('Capacity')
+a2.set_xlabel('Outdoor Temp (deg F)')
+a2.set_ylim(0.,50000.)
+a2.set_autoscalex_on(False)
+a2.set_autoscaley_on(False)
+plt.grid(True)
 
-def popupmsg(msg):
+def popupmsg(title, msg):
     
     popup = tk.Tk()
-    popup.wm_title("Say what!")
+    popup.wm_title(title)
     label = ttk.Label(popup,text=msg,font=NORM_FONT)
     label.pack(side="top", fill="x", pady=10)
     B1=ttk.Button(popup, text="OK",command=popup.destroy)
@@ -244,7 +228,9 @@ def loadOilDeliveries(purchasesFile):
 
     # this was take from previous code tested using First Parish oil purchases
     # input = open('./Residential Profiles/FP Oil Deliveries.txt')
-    global numDeliveries    
+    global numDeliveries
+    global fuelDeliveryHeader
+        
     numDeliveries = 0
     purchase_Vol.clear()
     purchase_Cost.clear()
@@ -261,10 +247,12 @@ def loadOilDeliveries(purchasesFile):
         
     test = input.read()
     lines = test.split('\n')
+    input.close()
     
     LN = 0      # step through data starting at first line
     while True:
         print(lines[LN])
+        fuelDeliveryHeader += lines[LN]
         LN += 1
         if lines[LN].find('$$')>=0 :
             LN += 1 
@@ -297,14 +285,11 @@ def loadOilDeliveries(purchasesFile):
         if tokens[3].isalpha():
             continue         # skip maintenance records
         
-        numDeliveries += 1
-
         gallons = tokens[3].replace(',','')
         try:
             gallons = float(gallons)
         except:
             gallons = 0.0
-        purchase_Vol.append(gallons)
 
         dollars = tokens[2][tokens[2].find('$')+1:]
         try:
@@ -312,15 +297,13 @@ def loadOilDeliveries(purchasesFile):
             dollars = float(dollars)
         except:
             dollars = 0.0
+            
         if dollars>0 and gallons>0:
             lastPrice = dollars/gallons
         elif gallons>0:
             dollars = lastPrice*gallons 
         elif dollars==0.0 and gallons==0.0:
             break
-            
-        purchase_Cost.append(dollars)
-    
             
         if first:
             prevDeliveryDate = date(year,1,1)
@@ -338,7 +321,55 @@ def loadOilDeliveries(purchasesFile):
         prevmonthyear = (prevMonth,prevYear)
 
         DeliveryDate = date(year,month,day)
+
+        purchase_Vol.append(gallons)
+        purchase_Cost.append(dollars)            
         purchase_Date.append(DeliveryDate)
+
+        numDeliveries += 1
+    
+    return numDeliveries
+def saveOilDeliveries(purchasesFile):
+
+    global numDeliveries 
+    global fuelDeliveryHeader   
+
+    # open the purchases file
+    if numDeliveries<=0:
+        print("No delivery data to save")
+        return
+    
+    try:
+        output = open(purchasesFile,'w', encoding='latin-1')
+
+    except:
+        print("Unable to open output file")
+        return
+        
+# write a couple line header
+    now = datetime.date.today()
+    now = now.isoformat()
+    outputstring = "Fuel delivery data for: (enter name here)\nFile date: "+now+"\nYear	Date	$$	Gallons\n"
+
+    oldYear = 0
+    for i in range(numDeliveries) :
+        year = purchase_Date[i].year
+        if oldYear!= year :
+            oldYear = year
+            outputstring += "%d\t" % year
+        else :
+            outputstring += "\t"
+        
+        day = purchase_Date[i].day
+        month = purchase_Date[i].month
+        year = purchase_Date[i].year % 100
+        outputstring += "%d/%d/%02d\t" % (month, day, year)
+        
+        outputstring += "$%.2f\t" % purchase_Cost[i]
+        outputstring += "%.1f\n" % purchase_Vol[i]
+        
+    output.write(outputstring)
+    output.close()
     
     return numDeliveries
 
@@ -664,16 +695,32 @@ class HeatPumpPerformanceApp(tk.Tk):
         frame.tkraise()
 
 class StartPage(tk.Frame) :
+        
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
         
-        label=ttk.Label(self,text="PRELIMINARY: This heat pump analysis tool is a prototype which has been adaptated\n from the Tufts ME145 Spring 2015 project by J.Kadako et al.\nIt has limited applicability and needs to be extended to be useful\nUse at your own risk",font=NORM_FONT)
-        
+        label=ttk.Label(self,text="PRELIMINARY: This heat pump analysis tool is a prototype which has been adaptated\n from the Tufts ME145 Spring 2015 project by J.Kadako et al.\nIt has limited applicability and needs to be extended to be useful\nUse at your own risk",font=NORM_FONT)        
         label.pack(pady=10,padx=10)
+
+        label2=ttk.Label(self,text="Copyright 2015, Town of Concord Comprehensive Sustainable Energy Committee",font=SMALL_FONT)        
+        label2.pack(pady=10,padx=10)
+
+        label3=ttk.Label(self,text="This software tool can be freely distributed, and is covered by the GNU Public License",font=SMALL_FONT)        
+        label3.pack(pady=10,padx=10)
  
         button1 = ttk.Button(self,text="Continue",
                     command = lambda: controller.show_frame(HomePage))
         button1.pack()
+
+        def showLicense():
+            input = open("LICENSE")
+            text = input.read()
+            
+            popupmsg("License Information",text)
+
+        button0 = ttk.Button(self,text="License Information",
+                    command = lambda: showLicense())
+        button0.pack()
 
         button2 = ttk.Button(self,text="Quit",
                     command = quit)
@@ -750,9 +797,7 @@ def doHeatPumpAnalysis(where,text):
     updateGraph = True
     
 
-def LoadDeliveriesDlg() :
- #   root = tk.Tk()
- #   root.wm_title()
+def LoadDeliveriesDlg(parent) :
     
     fname = filedialog.askopenfilename(filetypes=( ("text files","*.txt"),("All files","*.*") ), 
     title="Select file containing oil deliveries data" )
@@ -760,40 +805,145 @@ def LoadDeliveriesDlg() :
         print("no file selected")
     else:
         loadOilDeliveries(fname)
+
+    parent.HeaderInfo
     
+def SaveDeliveriesDlg() :
+ #   root = tk.Tk()
+ #   root.wm_title()
+    
+    fname = filedialog.asksaveasfilename(filetypes=( ("text files","*.txt"),("All files","*.*") ), 
+    title="Select file to save fuel deliveries data" )
+    if len(fname)>0:
+        print("Saving delivery data to %s" % fname)
+        saveOilDeliveries(fname)
+
+def UpdateDeliveryDataView(listbox):
+    for h in range(numDeliveries) :
+        datastring = "\t\t%s\t\t$%.2f\t\t%.1f" % (purchase_Date[h],purchase_Cost[h],purchase_Vol[h])
+        listbox.insert(h,datastring)
+            
+def AddDelivery(listbox):
+    # dialog to inquire date cost and volume
+    dDate,dCost,dAmount = AddDeliveryDlg()
+    # find location in list
+    
+    # insert into lists
+    
+    UpdateDeliveryDataView(listbox)
+        
+def DeleteDelivery(listbox):
+    # inquire "Are you sure" (proceed, cancel options, with don't ask again option)
+    
+    # get index to delivery
+    
+    # delete entry from lists
+    
+    UpdateDeliveryDataView(listbox)
+        
+def EditDelivery(listbox):
+    # dialog with delivery info to modify (with save, cancel options)
+    
+    # if date changed, get new index
+        # delete from existing loc, insert into new loc
+    
+    # update entry in lists
+    
+    UpdateDeliveryDataView(listbox)
+        
 class FuelDeliveryPage(tk.Frame):
+    global fuelDeliveryHeader
+    
+    
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
-        label=ttk.Label(self,text="Fuel Deliveries Page: This is for current oil customers",font=LARGE_FONT)
+        label=ttk.Label(self,text="Fuel Deliveries Page: This is for current oil customers",font=LARGE_FONT)        
+        label.grid(row=0,column=0,columnspan=4,sticky=(E,W), pady=10,padx=10)
         
-        label.pack(pady=10,padx=10)
-        
+        lblHdr=ttk.Label(self,text="Delivery header information (select to edit)",font=SMALL_FONT)        
+        lblHdr.grid(row=1,column=1, pady=10)
+
+        lblData=ttk.Label(self,text="Delivery data (select to edit)",font=SMALL_FONT)        
+        lblData.grid(row=3,column=1, pady=10)
+
+
         button1 = ttk.Button(self,text="Load Delivery Data",
-                    command = lambda: LoadDeliveriesDlg())
-        button1.pack()
+                    command = lambda: LoadDeliveriesDlg(self))
+        button1.grid(row=8,column=0)
 
         button2 = ttk.Button(self,text="Enter/Edit Deliveries",
-                    command = lambda: EditDeliveriesDlg)
-        button2.pack()
+                    command = lambda: EditDeliveriesDlg(self))
+        button2.grid(row=8,column=1)
 
         button3 = ttk.Button(self,text="Save Delivery data",
-                    command = lambda: SaveDeliveriesDlg)
-        button3.pack()
+                    command = lambda: SaveDeliveriesDlg(self))
+        button3.grid(row=8,column=2)
+
+        lbHdr = tk.Listbox(self,selectmode=tk.SINGLE,height=2,width=80)
+        lbHdr.grid(row=2,column=0,columnspan=3)
+
+        lbData = tk.Listbox(self,selectmode=tk.SINGLE,height=20,width=80)
+        lbData.grid(row=4,column=0,columnspan=3, rowspan=3)
 
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
-        button4.pack()
+        button4.grid(row=9,column=1)
 
+        button5 = ttk.Button(self,text="Add Delivery",
+                    command = lambda: AddDelivery(lbData))
+        button5.grid(row=4,column=4)
+
+        button6 = ttk.Button(self,text="Edit Delivery",
+                    command = lambda: EditDelivery(lbData))
+        button6.grid(row=5,column=4)
+
+        button7 = ttk.Button(self,text="Delete Delivery",
+                    command = lambda: DeleteDelivery(lbData))
+        button7.grid(row=6,column=4)
+
+        button8 = ttk.Button(self,text="Edit",command = lambda: EditHeaderInfo())
+        button8.grid(row=2,column=4)
+        
+
+        if len(fuelDeliveryHeader)>0 :
+            hl = fuelDeliveryHeader.split('\n')
+            for h in range(len(hl)):
+                hdrString = "\t\t"+hl[h]
+                lbHdr.insert(h,hl[h])
+        else:
+            lbHdr.insert(0,"\t\tNo delivery data entered")
+            
+        UpdateDeliveryDataView(lbData)
+            
 class BaselineHeatingPage(tk.Frame):
     global EfficiencyHVAC
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
         label=ttk.Label(self,text="Baseline Heating Options: Select alternative system for comparison",font=LARGE_FONT)
-        label.pack(pady=10,padx=10)
+        label.grid(row=0,column=2,columnspan=3,pady=10,padx=10)
   
-        label1=ttk.Label(self,text="Default baseline system is fuel oil, with 75% efficiency",font=SMALL_FONT)
-        label1.pack(pady=30,padx=10)
+        label1=ttk.Label(self,text="Select baseline system type, efficiency, and operating parameters",font=SMALL_FONT)
+        label1.grid(row=1,column=2,columnspan=3,pady=30,padx=10)
+        
+        BLType = IntVar()
+        BLType.set(0)
+        
+        def SetBLScenario(BLT) :
+            print("Baseline scenario chosen")
 
+        rb1 = tk.Radiobutton(self, text="Fuel Oil",      variable=BLType, value=0, command=lambda: SetBLScenario(0))
+        rb2 = tk.Radiobutton(self, text="Natural Gas",  variable=BLType, value=1, command=lambda: SetBLScenario(1))
+        rb3 = tk.Radiobutton(self, text="Propane (LPG)",  variable=BLType, value=2, command=lambda: SetBLScenario(2))
+        rb4 = tk.Radiobutton(self, text="Electric Resistance",  variable=BLType, value=3, command=lambda: SetBLScenario(3))
+        rb5 = tk.Radiobutton(self, text="Other",  variable=BLType, value=4, command=lambda: SetBLScenario(4))
+
+        rb1.grid(row=2,column=0)
+        rb2.grid(row=2,column=1)
+        rb3.grid(row=2,column=2)
+        rb4.grid(row=2,column=3)
+        rb5.grid(row=2,column=4)
+        rb1.invoke()
+        
 #        def getEfficiency():
 #            global EFFICIENCY_HVAC
 #            EFFICIENCY_HVAC = float1.getDouble()
@@ -811,9 +961,11 @@ class BaselineHeatingPage(tk.Frame):
         eff = StringVar()
         eff.set(s)
 
+        label2=ttk.Label(self,text="\tSet System Efficiency",font=SMALL_FONT)
+        label2.grid(row=3,column=0,columnspan=3,pady=30,padx=10)
         e = Entry(self, width=5, textvariable=eff)
         e.bind("<Return>", evaluate)
-        e.pack()
+        e.grid(row=3, column=3)
 
               
         def setStartDate() :
@@ -824,18 +976,21 @@ class BaselineHeatingPage(tk.Frame):
             cd = CalendarDialog(self)
             turn_OFF_Date = datetime.date(cd.result.year, cd.result.month, cd.result.day)           
             print (turn_OFF_Date)
+
+        label3=ttk.Label(self,text="Set Annual System Start/End Dates",font=SMALL_FONT)
+        label3.grid(row=4,column=0,columnspan=3,pady=30,padx=10)
             
         button2 = ttk.Button(self,text="Start Date",
                     command = lambda: setStartDate())
-        button2.pack()
+        button2.grid(row=4,column=3)
 
         button3 = ttk.Button(self,text="End Date",
                     command = lambda: setEndDate())
-        button3.pack()
+        button3.grid(row=4,column=4)
 
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
-        button4.pack()
+        button4.grid(row=10, column=2)
 
 def selHeatPump(H):
     global HPiD
@@ -865,16 +1020,11 @@ def selHeatPump(H):
         CAPMin.append(t*t*c_Min[HPiD][1] + t*b_Min[HPiD][1] + a_Min[HPiD][1])
                 
     a1.clear()
-#    xm,ym = plt.ylim()
             
     if firstPlot:
- #       l1a, = a1.plot(tempArray,COPMax, color="red", label = "COP (max capacity)")
- #       l1b, = a1.plot(tempArray,COPMin, color="blue", label = "COP (min capacity)")
         l1c, = a1.plot(tDataD[HPiD],COPMaxD[HPiD], linestyle='-', color="red", marker='*', markersize=10,label = "COP (max capacity)") 
         l1d, = a1.plot(tDataD[HPiD],COPMinD[HPiD], linestyle='-', color="blue", marker=r'*', markersize=10, label = "COP (min capacity)") 
     else:
-#        l1a.set_ydata(COPMax)
-#        l1b.set_ydata(COPMin)
         l1c.set_xdata(tDataD[HPiD])
         l1c.set_ydata(COPMaxD[HPiD])
         l1d.set_xdata(tDataD[HPiD])
@@ -888,20 +1038,14 @@ def selHeatPump(H):
     a1.set_title(title)
 
     a2.clear()
-#    xm,ym = plt.ylim()
     if firstPlot:
                 
-#        l2a, = a2.plot(tempArray,CAPMax, color="red", label = "Max capacity")
-#        l2b, = a2.plot(tempArray,CAPMin, color="blue", label = "Min capacity")
         l2c, = a2.plot(tDataD[HPiD],CAPMaxD[HPiD], linestyle='-', color="red", marker=r'*', markersize=10, label = "Max capacity") 
         l2d, = a2.plot(tDataD[HPiD],CAPMinD[HPiD], linestyle='-', color="blue", marker=r'*', markersize=10, label = "Min capacity") 
         title = "Capacity vs temperature"
         a2.set_title(title)
         a2.legend(bbox_to_anchor=(0,0.80,1,.1),loc=3, ncol=3, borderaxespad=0)
-#        firstPlot = False
     else:
-#        l2a.set_ydata(CAPMax)
-#        l2b.set_ydata(CAPMin)
         l2c.set_xdata(tDataD[HPiD])
         l2c.set_ydata(CAPMaxD[HPiD])
         l2d.set_xdata(tDataD[HPiD])
@@ -922,8 +1066,6 @@ class SelectHeatPumpPage(tk.Frame):
         label.grid(row=0,column=0,columnspan=5, sticky=(W,E))
 
         lb = tk.Listbox(self,selectmode=tk.SINGLE,height=15,width=50)
-#        scrollbar = Scrollbar(self)
-#        scrollbar.grid(row=1,column=2,rowspan=2,sticky=(N,W))   #pack( side = RIGHT, fill=Y )
 
         HPType = IntVar()
         HPType.set(0)
@@ -953,24 +1095,9 @@ class SelectHeatPumpPage(tk.Frame):
         lb.grid(row=2,column=0, rowspan=1,columnspan=3,sticky=(N))
         lb.activate(HPiD)
         
-#        scrollbar.config( command = lb.yview )
-        
- 
-#fig = plt.figure()
-#ax = fig.add_subplot(111)
-#line1, = ax.plot(x, y, 'r-') # Returns a tuple of line objects, thus the comma
-
-#for phase in np.linspace(0, 10*np.pi, 500):
-#    line1.set_ydata(np.sin(x + phase))
-#    fig.canvas.draw()
-
         canvas = FigureCanvasTkAgg(f1,self)
         canvas.show()
         canvas.get_tk_widget().grid(column=3, columnspan=3, row=1, rowspan=3)  #fill=tk.BOTH,,pady=10
-
-#        canvas = FigureCanvasTkAgg(f2,self)
- #       canvas.show()
-  #      canvas.get_tk_widget().grid(column=3, columnspan=3, row=2, rowspan=1)  #fill=tk.BOTH,,pady=10
 
         text1 = ttk.Label(self,text='Selected Heat Pump Data',font=NORM_FONT)
         text1.grid(row=3,column=0,columnspan=3,sticky=(N,E,W))
@@ -982,8 +1109,7 @@ class SelectHeatPumpPage(tk.Frame):
         
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
-        button4.grid(row=5,column=1)
-        
+        button4.grid(row=5,column=1)        
        
 
 class GraphPage(tk.Frame):
