@@ -97,38 +97,53 @@ Q_Abs_Min = [] # Absolute Maximum possible capacity as given in the datasheet (n
 electric_Abs_E_Max = [] # (1 To HP_MAX, 1 To HP_FIT) As Single
 electric_Abs_E_Min = [] # (1 To HP_MAX, 1 To HP_FIT) As Single
 
-# for BaseHeatType == "Oil"
-STANDARD_OIL_PRICE = 3.0
+BASE_HEAT_TYPE_OIL = 0
+BASE_HEAT_NAME_OIL = "Fuel Oil"
+STANDARD_PRICE_OIL = 3.0
 EFFICIENCY_HVAC_OIL = 0.75
 UNITS_OIL = "Gallons"
 ENERGY_CONTENT_OIL = 139000                             # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_OIL = 72.93*1e-6*ENERGY_CONTENT_OIL
-# for BaseHeatType == "Oil"
-STANDARD_GAS_PRICE = 999
+
+BASE_HEAT_TYPE_GAS = 1
+BASE_HEAT_NAME_GAS = "Natural Gas"
+STANDARD_PRICE_GAS = 999
 EFFICIENCY_HVAC_GAS = 0.90
 UNITS_GAS = "SCF"
 ENERGY_CONTENT_GAS = 1050                               # listed as 950-1150 from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_GAS = 53.06*1e-6*ENERGY_CONTENT_GAS      # http://www.epa.gov/climateleadership/documents/emission-factors.pdf
-# for BaseHeatType == "Electric"
-STANDARD_ELEC_PRICE = 0.15
+
+BASE_HEAT_TYPE_ELEC = 2
+BASE_HEAT_NAME_ELEC = "Electric Resistance"
+STANDARD_PRICE_ELEC = 0.15
 EFFICIENCY_HVAC_ELEC = 0.75
 UNITS_ELEC = "KWh"
 ENERGY_CONTENT_ELEC = 3412     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_ELEC = (722/2.2)*1e-3
-# for BaseHeatType == "Propane"
-STANDARD_LPG_PRICE = 999
+
+BASE_HEAT_TYPE_LPG = 3
+BASE_HEAT_NAME_LPG = "Propane"
+STANDARD_PRICE_LPG = 999
 EFFICIENCY_HVAC_LPG = 0.75
 UNITS_LPG = "Gallons"
 ENERGY_CONTENT_LPG = 91330     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_LPG = 62.*1e-6*ENERGY_CONTENT_LPG
 
-BaseHeatType = "Oil"
+BASE_HEAT_TYPE_OTHER = 4
+BASE_HEAT_NAME_OTHER = "????"
+STANDARD_PRICE_OTHER = 999
+EFFICIENCY_HVAC_OTHER = 1.0
+UNITS_OTHER = "???"
+ENERGY_CONTENT_OTHER = 1
+KGCO2_PER_UNIT_OTHER = 0
+
+BaseHeatType = BASE_HEAT_NAME_OIL
 BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
 BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 BaseEnergyUnits = UNITS_OIL
 BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
 
-SuppHeatType = "Oil"
+SuppHeatType = BASE_HEAT_NAME_OIL
 SuppHvacEfficiency = EFFICIENCY_HVAC_OIL
 SuppEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 SuppEnergyUnits = UNITS_OIL
@@ -224,7 +239,50 @@ def getDate(msg):
     B1.pack()
     popup.mainloop()
 
-def loadOilDeliveries(purchasesFile):
+def SetBLScenario(BLT) :
+    global BaseHeatType,BaseHvacEfficiency,BaseEnergyContent,BaseEnergyUnits,BaseKgCO2PerUnit
+    global SuppHeatType,SuppHvacEfficiency,SuppEnergyContent,SuppEnergyUnits,SuppKgCO2PerUnit
+    if BLT == BASE_HEAT_TYPE_OIL :    # oil
+        BaseHeatType = BASE_HEAT_NAME_OIL
+        BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
+        BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+        BaseEnergyUnits = UNITS_OIL
+        BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
+    elif BLT == BASE_HEAT_TYPE_GAS : # natural gas
+        BaseHeatType = BASE_HEAT_NAME_GAS
+        BaseHvacEfficiency = EFFICIENCY_HVAC_GAS
+        BaseEnergyContent = ENERGY_CONTENT_GAS     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+        BaseEnergyUnits = UNITS_GAS
+        BaseKgCO2PerUnit = KGCO2_PER_UNIT_GAS
+    elif BLT == BASE_HEAT_TYPE_ELEC : # electric
+        BaseHeatType = BASE_HEAT_NAME_ELEC
+        BaseHvacEfficiency = EFFICIENCY_HVAC_ELEC
+        BaseEnergyContent = ENERGY_CONTENT_ELEC     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+        BaseEnergyUnits = UNITS_ELEC
+        BaseKgCO2PerUnit = KGCO2_PER_UNIT_ELEC
+    elif BLT == BASE_HEAT_TYPE_LPG : # propane
+        BaseHeatType = BASE_HEAT_NAME_LPG
+        BaseHvacEfficiency = EFFICIENCY_HVAC_LPG
+        BaseEnergyContent = ENERGY_CONTENT_LPG     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+        BaseEnergyUnits = UNITS_LPG
+        BaseKgCO2PerUnit = KGCO2_PER_UNIT_LPG
+    else:
+        BaseHeatType = BASE_HEAT_NAME_OIL
+        BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
+        BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+        BaseEnergyUnits = UNITS_OIL
+        BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
+        print("Other baseline heating types not supported")
+    print("Baseline scenario chosen: "+BaseHeatType)
+
+    # for now, assume supplemental system is same as the baseline system
+    SuppHeatType = BaseHeatType
+    SuppHvacEfficiency = BaseHvacEfficiency
+    SuppEnergyContent = BaseEnergyContent     
+    SuppEnergyUnits = BaseEnergyUnits
+    SuppKgCO2PerUnit = BaseKgCO2PerUnit
+
+def loadFuelDeliveries(purchasesFile):
 
     # this was take from previous code tested using First Parish oil purchases
     # input = open('./Residential Profiles/FP Oil Deliveries.txt')
@@ -232,6 +290,7 @@ def loadOilDeliveries(purchasesFile):
     global fuelDeliveryHeader
         
     numDeliveries = 0
+    fuelDeliveryHeader = ""
     purchase_Vol.clear()
     purchase_Cost.clear()
     purchase_Date.clear()
@@ -254,17 +313,31 @@ def loadOilDeliveries(purchasesFile):
         print(lines[LN])
         fuelDeliveryHeader += lines[LN]
         LN += 1
+        
+        if lines[LN].find('Heat source: ')>=0 :
+            HeatSource = lines[LN]
+            if HeatSource.find(BASE_HEAT_NAME_OIL)>=0 :
+                SetBLScenario(BASE_HEAT_TYPE_OIL)
+            elif HeatSource.find(BASE_HEAT_NAME_GAS)>=0 :
+                SetBLScenario(BASE_HEAT_TYPE_GAS)
+            elif HeatSource.find(BASE_HEAT_NAME_ELEC)>=0 :
+                SetBLScenario(BASE_HEAT_TYPE_ELEC)
+            elif HeatSource.find(BASE_HEAT_NAME_LPG)>=0 :
+                SetBLScenario(BASE_HEAT_TYPE_LPG)
+            
         if lines[LN].find('$$')>=0 :
             LN += 1 
             break;    # locate where the data starts
     print('====================')
 
-    if BaseHeatType == "Oil":
-        lastPrice = STANDARD_OIL_PRICE
-    elif BaseHeatType == "Gas":
-        lastPrice = STANDARD_GAS_PRICE
-    elif BaseHeatType == "Electric":
-        lastPrice = STANDARD_ELEC_PRICE
+    if BaseHeatType == BASE_HEAT_NAME_OIL:
+        lastPrice = STANDARD_PRICE_OIL
+    elif BaseHeatType == BASE_HEAT_NAME_GAS:
+        lastPrice = STANDARD_PRICE_GAS
+    elif BaseHeatType == BASE_HEAT_NAME_ELEC:
+        lastPrice = STANDARD_PRICE_ELEC
+    elif BaseHeatType == BASE_HEAT_NAME_LPG:
+        lastPrice = STANDARD_PRICE_LPG
     
     first = True
     while True:
@@ -329,7 +402,7 @@ def loadOilDeliveries(purchasesFile):
         numDeliveries += 1
     
     return numDeliveries
-def saveOilDeliveries(purchasesFile):
+def saveFuelDeliveries(purchasesFile):
 
     global numDeliveries 
     global fuelDeliveryHeader   
@@ -349,7 +422,7 @@ def saveOilDeliveries(purchasesFile):
 # write a couple line header
     now = datetime.date.today()
     now = now.isoformat()
-    outputstring = "Fuel delivery data for: (enter name here)\nFile date: "+now+"\nYear	Date	$$	Gallons\n"
+    outputstring = "Fuel delivery data for: (enter name here)\nFile date: "+now+"\nYear	Date	$$	"+BaseEnergyUnits+"s\n"
 
     oldYear = 0
     for i in range(numDeliveries) :
@@ -383,7 +456,7 @@ def initializeData():
     # filename = 'FP Oil Deliveries.txt'
     filename = 'Default Oil Deliveries.txt'
     purchasesFile = workingDirectory + filename
-    numDeliveries = loadOilDeliveries(purchasesFile)
+    numDeliveries = loadFuelDeliveries(purchasesFile)
     
 def loadData():
 # Adapted fromVBA project, Author: Jonah Kadoko
@@ -736,7 +809,7 @@ class HomePage(tk.Frame) :
         label.pack(pady=10,padx=10)
         
 #        text1=ttk.Label(self,text="Analysis results to show here",font=NORM_FONT)
-        text1=tk.Text(self,font=NORM_FONT, height=30, width=80)
+        text1=tk.Text(self,font=NORM_FONT, height=30, width=90)
         text1.insert(END,"\nResults:\n")
         button1 = ttk.Button(self,text="Baseline Heating Scenario",
                     command = lambda: controller.show_frame(BaselineHeatingPage))
@@ -791,22 +864,36 @@ def doHeatPumpAnalysis(where,text):
         totHPEmissions += ElecKgCO2PerUnit*KWhByYear[Y]
         totSuppEmissions += SuppKgCO2PerUnit*SuppUnitsByYear[Y]
 
-    results += "\nOver the years %d-%d, the heat pump would have saved $%.0f, emitting %d%% less CO2eq than %s\n" % (startYear,endYear,totSavings,(100.*(totBaseEmissions - totHPEmissions - totSuppEmissions))/totBaseEmissions, BaseHeatType)
+    
+    if totSavings>0 :
+        savingsImpact = "saved"
+    else:
+        savingsImpact = "cost an additional"
+        
+    CO2_percent_impact = (100.*(totBaseEmissions - totHPEmissions - totSuppEmissions))/totBaseEmissions
+    if CO2_percent_impact>0 : 
+        CO2Impact = "less"
+    else:
+        CO2Impact = "more"
+        
+    results += "\nOver the years %d-%d, the heat pump would have %s $%.0f, emitting %.0f%% %s CO2eq than %s\n" % (startYear,endYear,savingsImpact, abs(totSavings), CO2_percent_impact, CO2Impact,BaseHeatType)
     text.insert(END,results)
     
     updateGraph = True
     
 
-def LoadDeliveriesDlg(parent) :
+def LoadDeliveriesDlg(parent,listbox,lbHdr) :
     
     fname = filedialog.askopenfilename(filetypes=( ("text files","*.txt"),("All files","*.*") ), 
     title="Select file containing oil deliveries data" )
     if fname is None:
         print("no file selected")
     else:
-        loadOilDeliveries(fname)
+        loadFuelDeliveries(fname)
 
-    parent.HeaderInfo
+    UpdateDeliveryHdrView(lbHdr)
+    
+    UpdateDeliveryDataView(listbox)
     
 def SaveDeliveriesDlg() :
  #   root = tk.Tk()
@@ -819,16 +906,95 @@ def SaveDeliveriesDlg() :
         saveOilDeliveries(fname)
 
 def UpdateDeliveryDataView(listbox):
-    for h in range(numDeliveries) :
+    listbox.delete(0,END)
+    for h in range(numDeliveries-1) :
         datastring = "\t\t%s\t\t$%.2f\t\t%.1f" % (purchase_Date[h],purchase_Cost[h],purchase_Vol[h])
         listbox.insert(h,datastring)
+
+def UpdateDeliveryHdrView(lb):
+    lb.delete(0,END)
+    
+    if len(fuelDeliveryHeader)>0 :
+        hl = fuelDeliveryHeader.split('\n')
+        for h in range(len(hl)):
+            hdrString = "\t\t"+hl[h]
+            lb.insert(h,hl[h])
+    else:
+        lb.insert(0,"\t\tNo delivery data entered")
+    
+class AddDeliveryDlg(tkSimpleDialog.Dialog):
+    """Dialog box that displays a calendar and returns the selected date"""
+    
+        
+    def body(self, master):
+#        self.calendar = ttkcalendar.Calendar(master)
+#        self.calendar.pack()
+        lblDate = ttk.Label(self,text="Delivery Date",font=SMALL_FONT)
+        lblDate.pack()
+#        self.lblDate.grid(row=3, column=1)
+        today = datetime.date.today()
+        dateString =datetime.date.isoformat(today)
+#        deliveryDate = StringVar()
+ #       deliveryDate.set(dateString)
+        def setDeliveryDate():
+            cd = CalendarDialog(self)
+            dateString = datetime.date(cd.result.year, cd.result.month, cd.result.day).isoformat()
+            deliveryDate.set(dateString)
+            txtDate.delete(0,END)
+            txtDate.insert( 0,dateString)       
+        def updateDeliveryList():
+            pass
+        txtDate = Entry(self, width=10, textvariable=deliveryDate)
+#        txtDate.grid(row=3, column=2)
+        txtDate.pack()
+        txtDate.delete(0, END)
+        txtDate.insert(0,dateString)
+        
+        btnDate = tk.Button(self, text="Calendar", command=lambda: setDeliveryDate())
+#        btnDate.grid(row=3, column=2)
+        self.btnDate.pack()
+
+        self.lblAmount = ttk.Label(self,text="Quantity",font=SMALL_FONT)
+        self.lblAmount.pack()
+        deliveryAmount = StringVar()
+        txtAmount = tk.Entry(self, width=10, textvariable=deliveryAmount)
+#        txtAmount.grid(row=3, column=2)
+        txtAmount.pack()
+        
+        lblCost = ttk.Label(self,text="Total Cost",font=SMALL_FONT)
+        lblCost.pack()
+        deliveryCost = StringVar()
+        txtCost = tk.Entry(self, width=10, textvariable=deliveryCost)
+#        txtCost.grid(row=3, column=2)
+        txtCost.pack()
+        
+        btnUpdate = tk.Button(self, text="Add and continue", command=lambda: updateDeliveryList())
+#        btnUpdate.grid(row=3, column=2)
+        btnUpdate.pack()
+
+    def apply(self):
+        result = (date,deliveryAmount,deliveryCost)
             
-def AddDelivery(listbox):
+def AddDelivery(self,listbox):
     # dialog to inquire date cost and volume
-    dDate,dCost,dAmount = AddDeliveryDlg()
+    dDate,dCost,dAmount = AddDeliveryDlg(self)
     # find location in list
     
     # insert into lists
+    
+    UpdateDeliveryDataView(listbox)
+        
+def ClearDeliveryData(self,listbox):
+    # are you sure
+    global numDeliveries
+    
+    # clear the data
+    numDeliveries = 0
+    purchase_Date.clear()
+    purchase_Cost.clear()
+    purchase_Vol.clear()
+    
+    # Update the listbox
     
     UpdateDeliveryDataView(listbox)
         
@@ -854,7 +1020,6 @@ def EditDelivery(listbox):
 class FuelDeliveryPage(tk.Frame):
     global fuelDeliveryHeader
     
-    
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
         label=ttk.Label(self,text="Fuel Deliveries Page: This is for current oil customers",font=LARGE_FONT)        
@@ -866,9 +1031,8 @@ class FuelDeliveryPage(tk.Frame):
         lblData=ttk.Label(self,text="Delivery data (select to edit)",font=SMALL_FONT)        
         lblData.grid(row=3,column=1, pady=10)
 
-
         button1 = ttk.Button(self,text="Load Delivery Data",
-                    command = lambda: LoadDeliveriesDlg(self))
+                    command = lambda: LoadDeliveriesDlg(self, lbData,lbHdr))
         button1.grid(row=8,column=0)
 
         button2 = ttk.Button(self,text="Enter/Edit Deliveries",
@@ -883,36 +1047,32 @@ class FuelDeliveryPage(tk.Frame):
         lbHdr.grid(row=2,column=0,columnspan=3)
 
         lbData = tk.Listbox(self,selectmode=tk.SINGLE,height=20,width=80)
-        lbData.grid(row=4,column=0,columnspan=3, rowspan=3)
+        lbData.grid(row=4,column=0,columnspan=3, rowspan=4)
 
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
         button4.grid(row=9,column=1)
 
         button5 = ttk.Button(self,text="Add Delivery",
-                    command = lambda: AddDelivery(lbData))
+                    command = lambda: AddDelivery(self,lbData))
         button5.grid(row=4,column=4)
 
         button6 = ttk.Button(self,text="Edit Delivery",
-                    command = lambda: EditDelivery(lbData))
+                    command = lambda: EditDelivery(self,lbData))
         button6.grid(row=5,column=4)
 
         button7 = ttk.Button(self,text="Delete Delivery",
-                    command = lambda: DeleteDelivery(lbData))
+                    command = lambda: DeleteDelivery(self,lbData))
         button7.grid(row=6,column=4)
+
+        button7 = ttk.Button(self,text="Delete All Deliveries",
+                    command = lambda: ClearDeliveryData(self,lbData))
+        button7.grid(row=7,column=4)
 
         button8 = ttk.Button(self,text="Edit",command = lambda: EditHeaderInfo())
         button8.grid(row=2,column=4)
         
-
-        if len(fuelDeliveryHeader)>0 :
-            hl = fuelDeliveryHeader.split('\n')
-            for h in range(len(hl)):
-                hdrString = "\t\t"+hl[h]
-                lbHdr.insert(h,hl[h])
-        else:
-            lbHdr.insert(0,"\t\tNo delivery data entered")
-            
+        UpdateDeliveryHdrView(lbHdr)    
         UpdateDeliveryDataView(lbData)
             
 class BaselineHeatingPage(tk.Frame):
@@ -928,14 +1088,11 @@ class BaselineHeatingPage(tk.Frame):
         BLType = IntVar()
         BLType.set(0)
         
-        def SetBLScenario(BLT) :
-            print("Baseline scenario chosen")
-
-        rb1 = tk.Radiobutton(self, text="Fuel Oil",      variable=BLType, value=0, command=lambda: SetBLScenario(0))
-        rb2 = tk.Radiobutton(self, text="Natural Gas",  variable=BLType, value=1, command=lambda: SetBLScenario(1))
-        rb3 = tk.Radiobutton(self, text="Propane (LPG)",  variable=BLType, value=2, command=lambda: SetBLScenario(2))
-        rb4 = tk.Radiobutton(self, text="Electric Resistance",  variable=BLType, value=3, command=lambda: SetBLScenario(3))
-        rb5 = tk.Radiobutton(self, text="Other",  variable=BLType, value=4, command=lambda: SetBLScenario(4))
+        rb1 = tk.Radiobutton(self, text=BASE_HEAT_NAME_OIL,      variable=BLType, value=0, command=lambda: SetBLScenario(BASE_HEAT_TYPE_OIL))
+        rb2 = tk.Radiobutton(self, text=BASE_HEAT_NAME_GAS,  variable=BLType, value=1, command=lambda: SetBLScenario(BASE_HEAT_TYPE_GAS))
+        rb3 = tk.Radiobutton(self, text=BASE_HEAT_NAME_ELEC,  variable=BLType, value=2, command=lambda: SetBLScenario(BASE_HEAT_TYPE_ELEC))
+        rb4 = tk.Radiobutton(self, text=BASE_HEAT_NAME_LPG,  variable=BLType, value=3, command=lambda: SetBLScenario(BASE_HEAT_TYPE_LPG))
+        rb5 = tk.Radiobutton(self, text="Other",  variable=BLType, value=4, command=lambda: SetBLScenario(BASE_HEAT_TYPE_OTHER))
 
         rb1.grid(row=2,column=0)
         rb2.grid(row=2,column=1)
@@ -1131,26 +1288,6 @@ class GraphPage(tk.Frame):
         toolbar.update()
         canvas._tkcanvas.pack(side=tk.TOP,fill=tk.BOTH,expand=True)
 
-def testData():
-# adapted from VBA project by Author: Jonah Kadoko
-# This subroutine is to be used for testing purposes only
-# Sub loads all test data that the user would have entered in the final product
-# Make sure when integrating this module, variables from this sub are supplied
-
-# Edit 4/21/15 by John Webster - modified to inprepret input data from user forms
-
-# Dim p As Integer
-
-
-# This portion of the code is for test purposes only, remove it when in intergating in the main code
-# Worksheets("Test").Activate
-# Range("J1").Select
-
-# ActiveCell.Value = turn_ON_Date
-# ActiveCell.Offset(1, 0).Select
-# ActiveCell.Value = turn_OFF_Date
-    print('testData called')
-
 def isHeating(t) :
 
 # Author: Jonah Kadoko
@@ -1168,14 +1305,12 @@ def isHeating(t) :
     yr_Turn_OFF = datetime.datetime(current_Heating_Year + 1, turn_OFF_Date.month, turn_OFF_Date.day)
     yr_Turn_ON = datetime.datetime(current_Heating_Year, turn_ON_Date.month, turn_ON_Date.day)
 
-
     if (t_Data[t_Start] <= t_Data[t]) and (t_Data[t] <= yr_Turn_OFF) and \
     (yr_Turn_ON <= t_Data[t]) and (t_Data[t] <= t_Data[t_End]) and (T_Outdoor[t] < T_Indoor) :
         # t is within range of the heating period and purchase period and the outdoor temperature is below the indoor temperature
         return True
     else:
-        return False
-        
+        return False        
     
 def approxResistance():
     # Adapted from VBA project, Author: Jonah Kadoko
@@ -1425,62 +1560,25 @@ def heatPumpPerformance(H):
     return 1
     
 def outputData(HPiD):
-    # Author: Jonah Kadoko
-    # This routine outputs all results in the spreadsheet
+    # This routine outputs all results to a text file
     global last_Purchase
     
     outputFile = './Output Data/Heat Pump Analysis.txt'
     output = open(outputFile,'w')
-    
-    # Worksheets("Modified Temp Data").Activate
-    # Range("K1").Select
-    #  ActiveCell.Value = part_Number(H, 1)
-    # ActiveCell.Offset(0, 1).Select
-    # ActiveCell.Value = part_Number(H, 2)
-       
+           
     output.write('Analysis for: '+part_Number[HPiD]['Manufacturer']+' Model '+part_Number[HPiD]['Model']+'\r')
-    
-#    site_Data_Start_Cell.Select
- #   ActiveCell.Offset(0, 5).Select
-    
- #   ActiveCell.Offset(year_Start + t_Start - 1, 0).Select
-    
-    # Create a new figure of size 8x6 points, using 80 dots per inch
-#    figure(figsize=(8,6), dpi=80)
-    
-    # Create a new subplot from a grid of 1x1
-#    subplot(1,1,1)
-    
-    # Set x limits
- #   xlim(0.0,120.)
- #   ylim(0.0,max(ecdist)*1.2)
-
-#    xdist = 200*[0.0]
-#    for i in range(0,200):
- #       xdist[i] = 50+0.5*i
     
     
     for tv in range(t_Start,t_End):
         t= tv-t_Start
     
-#        ActiveCell.Value = 
         output.write(timeArray[t].ctime()+'\t{0:.2f}\t{1:f}\t{2:f}\t{3:f}\t{4:f}\n'.format(Q_required[t],electric_Required[t],supplemental_Heat[t], capacity_Max[t],COP_Ave[t]))
     
-#    print xdist
-#    plot(xdist,ecdist, color='blue', linewidth=1.,linestyle='-')
-#    plot(xdist,epdist, color='red', linewidth=1.,linestyle='-')
-#    show()
-    
-    
-#    for p in range(last_Purchase):
-#        output.write('approx_Resistance of purchase '+'%f\n' % approx_Resistance[p][1])
-
     output.close()
     
 # initialization code
 initializeData()
 loadData()
-
 
 # main routine 
 
@@ -1489,8 +1587,5 @@ ani = animation.FuncAnimation(f,animate, interval=1000)
 app.mainloop()
 app.destroy()
 
-#initialize()
-#testData()     # Supply purchase data before running loaddata; loaddata depends on the purchase start date
-#loadData()
 
 
