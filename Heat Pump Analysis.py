@@ -99,7 +99,7 @@ electric_Abs_E_Min = [] # (1 To HP_MAX, 1 To HP_FIT) As Single
 
 BASE_HEAT_TYPE_OIL = 0
 BASE_HEAT_NAME_OIL = "Fuel Oil"
-STANDARD_PRICE_OIL = 3.0
+STANDARD_PRICE_OIL = 3.20                               # Dec 2014 price - varied substantially in 2015
 EFFICIENCY_HVAC_OIL = 0.75
 UNITS_OIL = "Gallons"
 ENERGY_CONTENT_OIL = 139000                             # from http://www.engineeringtoolbox.com/energy-content-d_868.html
@@ -107,7 +107,7 @@ KGCO2_PER_UNIT_OIL = 72.93*1e-6*ENERGY_CONTENT_OIL
 
 BASE_HEAT_TYPE_GAS = 1
 BASE_HEAT_NAME_GAS = "Natural Gas"
-STANDARD_PRICE_GAS = 999
+STANDARD_PRICE_GAS = 0.01447                            # average MA price 2015
 EFFICIENCY_HVAC_GAS = 0.90
 UNITS_GAS = "SCF"
 ENERGY_CONTENT_GAS = 1050                               # listed as 950-1150 from http://www.engineeringtoolbox.com/energy-content-d_868.html
@@ -118,15 +118,15 @@ BASE_HEAT_NAME_ELEC = "Electric Resistance"
 STANDARD_PRICE_ELEC = 0.15
 EFFICIENCY_HVAC_ELEC = 0.75
 UNITS_ELEC = "KWh"
-ENERGY_CONTENT_ELEC = 3412     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+ENERGY_CONTENT_ELEC = 3412                              # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_ELEC = (722/2.2)*1e-3
 
 BASE_HEAT_TYPE_LPG = 3
 BASE_HEAT_NAME_LPG = "Propane"
-STANDARD_PRICE_LPG = 999
+STANDARD_PRICE_LPG = 3.105                              # average Ma LPG price 2015
 EFFICIENCY_HVAC_LPG = 0.75
 UNITS_LPG = "Gallons"
-ENERGY_CONTENT_LPG = 91330     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+ENERGY_CONTENT_LPG = 91330                              # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_LPG = 62.*1e-6*ENERGY_CONTENT_LPG
 
 BASE_HEAT_TYPE_OTHER = 4
@@ -142,12 +142,14 @@ BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
 BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 BaseEnergyUnits = UNITS_OIL
 BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
+BaseCostPerUnit = STANDARD_PRICE_OIL
 
-SuppHeatType = BASE_HEAT_NAME_OIL
-SuppHvacEfficiency = EFFICIENCY_HVAC_OIL
-SuppEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
-SuppEnergyUnits = UNITS_OIL
-SuppKgCO2PerUnit = KGCO2_PER_UNIT_OIL
+SuppHeatType = BaseHeatType
+SuppHvacEfficiency = BaseHvacEfficiency
+SuppEnergyContent = BaseEnergyContent     
+SuppEnergyUnits = BaseEnergyUnits
+SuppKgCO2PerUnit = BaseKgCO2PerUnit
+SuppCostPerUnit = BaseCostPerUnit
 
 ElecKgCO2PerUnit = KGCO2_PER_UNIT_ELEC
 
@@ -240,38 +242,43 @@ def getDate(msg):
     popup.mainloop()
 
 def SetBLScenario(BLT) :
-    global BaseHeatType,BaseHvacEfficiency,BaseEnergyContent,BaseEnergyUnits,BaseKgCO2PerUnit
-    global SuppHeatType,SuppHvacEfficiency,SuppEnergyContent,SuppEnergyUnits,SuppKgCO2PerUnit
+    global BaseHeatType,BaseHvacEfficiency,BaseEnergyContent,BaseEnergyUnits,BaseKgCO2PerUnit,BaseCostPerUnit
+    global SuppHeatType,SuppHvacEfficiency,SuppEnergyContent,SuppEnergyUnits,SuppKgCO2PerUnit,SuppCostPerUnit
     if BLT == BASE_HEAT_TYPE_OIL :    # oil
         BaseHeatType = BASE_HEAT_NAME_OIL
         BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
         BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_OIL
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
+        BaseCostPerUnit = STANDARD_PRICE_OIL
     elif BLT == BASE_HEAT_TYPE_GAS : # natural gas
         BaseHeatType = BASE_HEAT_NAME_GAS
         BaseHvacEfficiency = EFFICIENCY_HVAC_GAS
         BaseEnergyContent = ENERGY_CONTENT_GAS     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_GAS
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_GAS
+        BaseCostPerUnit = STANDARD_PRICE_GAS
     elif BLT == BASE_HEAT_TYPE_ELEC : # electric
         BaseHeatType = BASE_HEAT_NAME_ELEC
         BaseHvacEfficiency = EFFICIENCY_HVAC_ELEC
         BaseEnergyContent = ENERGY_CONTENT_ELEC     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_ELEC
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_ELEC
+        BaseCostPerUnit = STANDARD_PRICE_ELEC
     elif BLT == BASE_HEAT_TYPE_LPG : # propane
         BaseHeatType = BASE_HEAT_NAME_LPG
         BaseHvacEfficiency = EFFICIENCY_HVAC_LPG
         BaseEnergyContent = ENERGY_CONTENT_LPG     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_LPG
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_LPG
+        BaseCostPerUnit = STANDARD_PRICE_LPG
     else:
         BaseHeatType = BASE_HEAT_NAME_OIL
         BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
         BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_OIL
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
+        BaseCostPerUnit = STANDARD_PRICE_OIL
         print("Other baseline heating types not supported")
     print("Baseline scenario chosen: "+BaseHeatType)
 
@@ -281,6 +288,7 @@ def SetBLScenario(BLT) :
     SuppEnergyContent = BaseEnergyContent     
     SuppEnergyUnits = BaseEnergyUnits
     SuppKgCO2PerUnit = BaseKgCO2PerUnit
+    SuppCostPerUnit = BaseCostPerUnit
 
 def loadFuelDeliveries(purchasesFile):
 
@@ -747,6 +755,18 @@ class HeatPumpPerformanceApp(tk.Tk):
         tk.Tk.__init__(self,*args,**kwargs)
         # tk.Tk.iconbitmap(self,default="preferences.ico")          # blows up
         tk.Tk.wm_title(self, string="Heat Pump Analysis Tool")
+
+        def doNothing():
+            print("do nothing")
+            
+        menu=Menu(self)
+        self.config(menu=menu)
+        fileMenu = Menu(menu)
+        menu.add_cascade(label="File",menu=fileMenu)
+        fileMenu.add_command(label="New",command=doNothing)
+        fileMenu.add_separator()
+        fileMenu.add_command(label="Print",command=quit)
+        fileMenu.add_command(label="Quit",command=quit)
         
         container = tk.Frame(self)
         container.pack(side="top",fill="both",expand=True)
@@ -857,9 +877,9 @@ def doHeatPumpAnalysis(where,text):
     endYear = t_Data[t_End].year
     for year in range(startYear,endYear+1):
         Y = year-startYear
-        resultline = "%d\t%.1f\t$%.0f\t\t%.1f\t$%.0f\t\t%d\t%.1f\t$%.0f\n" % (year,BaseUnitsByYear[Y],BaseCostByYear[Y],KWhByYear[Y],KWhByYear[Y]*.15,SuppUsesByYear[Y],SuppUnitsByYear[Y],SuppUnitsByYear[Y]*3.0)
+        resultline = "%d\t%.1f\t$%.0f\t\t%.1f\t$%.0f\t\t%d\t%.1f\t$%.0f\n" % (year,BaseUnitsByYear[Y],BaseCostByYear[Y],KWhByYear[Y],KWhByYear[Y]*.15,SuppUsesByYear[Y],SuppUnitsByYear[Y],SuppUnitsByYear[Y]*SuppCostPerUnit)
         results += resultline
-        totSavings += BaseCostByYear[Y] - (KWhByYear[Y]*0.15 + SuppUnitsByYear[Y]*3)
+        totSavings += BaseCostByYear[Y] - (KWhByYear[Y]*0.15 + SuppUnitsByYear[Y]*SuppCostPerUnit)
         totBaseEmissions += BaseKgCO2PerUnit*BaseUnitsByYear[Y]
         totHPEmissions += ElecKgCO2PerUnit*KWhByYear[Y]
         totSuppEmissions += SuppKgCO2PerUnit*SuppUnitsByYear[Y]
