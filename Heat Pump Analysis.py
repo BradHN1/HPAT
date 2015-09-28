@@ -54,7 +54,10 @@ from tkinter import ttk
 from tkinter import filedialog
 
 from CalendarDialog import *
+from getInput import *
 import AddDeliveryDlg
+
+from HeatPump import *          # new heat pump class
 
 from datetime import datetime, date, time
 from pylab import *
@@ -68,34 +71,8 @@ style.use("ggplot")
 
 # Heat pump parameters
 
-HP_MAX = 17         # max number of heat pumps to be used in the analysis 
-HP_FIT = 2          # heat pump parameters that have been fit to a polynomial [1=COPmax/COPmin, 2=Qmin/Qmax]
-HPiD = 13   # global for now
-
-# part numbers of the heat pumps
-part_Number = []  # Manufacturer, Model (1 To HP_MAX, 1 To 2) As String 
-
-tDataD = []
-CAPMinD = []
-CAPMaxD = []
-COPMinD = []
-COPMaxD = []
-
-#  COP/Q = c*T^2 + b*T + c : The constant part of the polynomial fit of the heat pump data
-a_Max = [] 
-a_Min = []  
-b_Max = [] 
-b_Min = [] # (1 To HP_MAX, 1 To HP_FIT) As Single
-c_Max = [] # (1 To HP_MAX, 1 To HP_FIT) As Single
-c_Min = [] # (1 To HP_MAX, 1 To HP_FIT) As Single
-T_Min = [] # The min operating temperature of heat pumps
-
-# not used?
-Q_Abs_Max = [] # Absolute Maximum possible capacity
-Q_Abs_Min = [] # Absolute Maximum possible capacity as given in the datasheet (not temperature dependant !)
-
-electric_Abs_E_Max = [] # (1 To HP_MAX, 1 To HP_FIT) As Single
-electric_Abs_E_Min = [] # (1 To HP_MAX, 1 To HP_FIT) As Single
+HPiD = 0            # index to a single chosen heat pump
+HPList = []         # list of all defined heat pumps
 
 BASE_HEAT_TYPE_OIL = 0
 BASE_HEAT_NAME_OIL = "Fuel Oil"
@@ -161,16 +138,14 @@ t_Data = []    # (1 To SITE_DATA_MAX) As Date
 t_Start = 0
 t_End = 0
 
-# AVerage COP approximated for that particular temperature, should always be between COPmax and COPmin
-COP_Ave = [] # (1 To SITE_DATA_MAX, 1 To HP_MAX) As Single 
-
 # Customer Specific parameters
 fuelDeliveryHeader = ""
 purchase_Date = []
-purchase_Vol = []
+purchase_Quantity = []
 purchase_Cost = []
 numDeliveries = 0
 last_Purchase = -1
+current_Heating_Year = 2003         # at the very least, current heating year
 
 #turn_ON_Date  = datetime.date(2015,10,15)   # As Date # winter time on which the customer is likely to turn the HVAC
 #turn_OFF_Date  = datetime.date(2015,5,15)  # As Date # turn off HVAC heating
@@ -189,6 +164,7 @@ electric_Required = []  # Min consumption, Approximate requirement, Max consumpt
 capacity_Max = []       # maximum capacity of each heat pump in the heating period
 capacity_Min = []       # minimum capacity of each heat pump in the heating period
 supplemental_Heat = []  # additional heat required to meet heating requirements per hour
+COP_Ave = []            #  
 
 KWhByYear = []
 SuppUnitsByYear = []
@@ -229,17 +205,7 @@ def popupmsg(title, msg):
     label.pack(side="top", fill="x", pady=10)
     B1=ttk.Button(popup, text="OK",command=popup.destroy)
     B1.pack()
-    popup.mainloop()
-    
-def getDate(msg):
-    
-    popup = tk.Tk()
-    popup.wm_title("Enter Date")
-    label = ttk.Label(popup,text=msg,font=NORM_FONT)
-    label.pack(side="top", fill="x", pady=10)
-    B1=ttk.Button(popup, text="OK",command=popup.destroy)
-    B1.pack()
-    popup.mainloop()
+    popup.mainloop()    
 
 def SetBLScenario(BLT) :
     global BaseHeatType,BaseHvacEfficiency,BaseEnergyContent,BaseEnergyUnits,BaseKgCO2PerUnit,BaseCostPerUnit
@@ -273,12 +239,32 @@ def SetBLScenario(BLT) :
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_LPG
         BaseCostPerUnit = STANDARD_PRICE_LPG
     else:
-        BaseHeatType = BASE_HEAT_NAME_OIL
-        BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
-        BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
-        BaseEnergyUnits = UNITS_OIL
-        BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
-        BaseCostPerUnit = STANDARD_PRICE_OIL
+        gs = GetString("Specify baseline energy source", default=BASE_HEAT_NAME_OIL)
+        if gs.result:
+            BaseHeatType = gs.result
+
+            beu = BaseEnergyUnits = GetString("Specify units", default=UNITS_OIL)
+            BaseEnergyUnits = beu.result
+            
+            buc = GetFloat("Standard unit price [2015] ($)", default=STANDARD_PRICE_OIL, min=0., max=1000.)
+            BaseCostPerUnit = buc.result
+
+            bhe = GetFloat("System efficiency (%)", default=100*EFFICIENCY_HVAC_OIL, min=1., max=100.)
+            BaseHvacEfficiency = bhe.result * 0.01
+            
+            bhc = GetFloat("Energy content (BTU per unit)", default=ENERGY_CONTENT_OIL, min=1e-6, max=1e9)
+            BaseEnergyContent = bhc.result
+
+            bhk = GetFloat("CO2 emmissions (kg CO2 per unit)", default=KGCO2_PER_UNIT_OIL, min=1e-6, max=1e9)
+            BaseKgCO2PerUnit = bhk.result
+            
+        else:
+            BaseHeatType = BASE_HEAT_NAME_OIL
+            BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
+            BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+            BaseEnergyUnits = UNITS_OIL
+            BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
+            BaseCostPerUnit = STANDARD_PRICE_OIL
         print("Other baseline heating types not supported")
     print("Baseline scenario chosen: "+BaseHeatType)
 
@@ -299,7 +285,7 @@ def loadFuelDeliveries(purchasesFile):
         
     numDeliveries = 0
     fuelDeliveryHeader = ""
-    purchase_Vol.clear()
+    purchase_Quantity.clear()
     purchase_Cost.clear()
     purchase_Date.clear()
     
@@ -366,24 +352,24 @@ def loadFuelDeliveries(purchasesFile):
         if tokens[3].isalpha():
             continue         # skip maintenance records
         
-        gallons = tokens[3].replace(',','')
+        quantity = tokens[3].replace(',','')
         try:
-            gallons = float(gallons)
+            quantity = float(quantity)
         except:
-            gallons = 0.0
+            quantity = 0.0
 
-        dollars = tokens[2][tokens[2].find('$')+1:]
+        cost = tokens[2][tokens[2].find('$')+1:]
         try:
-            dollars = dollars.replace(',','')
-            dollars = float(dollars)
+            cost = cost.replace(',','')
+            cost = float(cost)
         except:
-            dollars = 0.0
+            cost = 0.0
             
-        if dollars>0 and gallons>0:
-            lastPrice = dollars/gallons
-        elif gallons>0:
-            dollars = lastPrice*gallons 
-        elif dollars==0.0 and gallons==0.0:
+        if cost>0 and quantity>0:
+            lastPrice = cost/quantity
+        elif quantity>0:
+            cost = lastPrice*quantity 
+        elif cost==0.0 and quantity==0.0:
             break
             
         if first:
@@ -403,8 +389,8 @@ def loadFuelDeliveries(purchasesFile):
 
         DeliveryDate = date(year,month,day)
 
-        purchase_Vol.append(gallons)
-        purchase_Cost.append(dollars)            
+        purchase_Quantity.append(quantity)
+        purchase_Cost.append(cost)            
         purchase_Date.append(DeliveryDate)
 
         numDeliveries += 1
@@ -447,7 +433,7 @@ def saveFuelDeliveries(purchasesFile):
         outputstring += "%d/%d/%02d\t" % (month, day, year)
         
         outputstring += "$%.2f\t" % purchase_Cost[i]
-        outputstring += "%.1f\n" % purchase_Vol[i]
+        outputstring += "%.1f\n" % purchase_Quantity[i]
         
     output.write(outputstring)
     output.close()
@@ -458,172 +444,99 @@ def initializeData():
     # adapted from VBA initialize, author Jonah Kadoko
     # Initialize important counters
 
-    current_Heating_Year = 2003 # at the very least, current heating year
-
     workingDirectory = './Residential Profiles/'
     # filename = 'FP Oil Deliveries.txt'
     filename = 'Default Oil Deliveries.txt'
     purchasesFile = workingDirectory + filename
     numDeliveries = loadFuelDeliveries(purchasesFile)
     
-def loadData():
-# Adapted fromVBA project, Author: Jonah Kadoko
-# Description:
-# 1. Loads all the public variables
-# 2. Perfoms any operations that may need to be done on the variables
-# 3. TBD.....
-# Application.ScreenUpdating = False
+def loadHeatPumps():
 
-    global HP_MAX
     # read the heat pump data file
     workingDirectory = './'
     filename = 'Cold Climate Air-Source Heat Pump Listing.txt'
     HeatPumpDataFile = workingDirectory + filename
-    
-    
+        
     input = open(HeatPumpDataFile,'r', encoding='latin-1')
     test = input.read()
     lines = test.split('\n')
 
     LN = 0      # step through data starting at first line
     tokens = lines[0].split('\t')
-    if tokens[0] == 'Manufacturer':     # original Tufts file
 
-        def tF(stringvar):
-            return float((stringvar.replace(',','')).replace('"',''))
- 
-        oldData = False
-                
-        # ' Load Heat Pump Data
-        first = True
-        while True:
-            
-            if (LN<len(lines)):
-                tokens = lines[LN].split('\t')
-                
-            else:
-                break
-            LN += 1
-            if LN<2:
-                continue;
-    
-            part_Number.append({'Manufacturer':tokens[0], 'Model':tokens[2], 'Outdoor Unit':tokens[3], 'Indoor Units':tokens[4],'Variable?':tokens[5],'HSPF(IV)':tokens[6],'SEER':tokens[7],'Type':tokens[10],'Zones':tokens[11]})   
-            # (hp, 1) = ActiveCell.Value
-    
-            if len(tokens)<50 : 
-                    break
- 
-            if oldData:
-                # old buggy version of data - slope and intercept parameters calculated for COP were off
-                c_Min.append([float(tokens[44]),float(tokens[38])])
-                b_Min.append([float(tokens[45]),float(tokens[39])])
-                a_Min.append([float(tokens[46]),float(tokens[40])]) 
-                
-                c_Max.append([float(tokens[47]),float(tokens[41])])
-                b_Max.append([float(tokens[48]),float(tokens[42])])
-                a_Max.append([float(tokens[49]),float(tokens[43])])
-            else:
-                # calculate linear parameters a and b from the NEEP data
-                c_Min.append([0.0,0.0])
-
-                    
-                bMinCAP = (tF(tokens[11])-tF(tokens[29]))/(47-5)
-                bMinCOP = (tF(tokens[17])-tF(tokens[35]))/(47-5)
-                b_Min.append([bMinCOP,bMinCAP])
-                
-                aMinCAP = tF(tokens[29]) - 5.*bMinCAP
-                aMinCOP = tF(tokens[35]) - 5.*bMinCOP
-                a_Min.append([aMinCOP,aMinCAP])
-                
-                c_Max.append([0.0,0.0])
-                
-                bMaxCAP = (tF(tokens[13])-tF(tokens[31]))/(47-5)
-                bMaxCOP = (tF(tokens[19])-tF(tokens[37]))/(47-5)
-                b_Max.append([bMaxCOP,bMaxCAP])
-                
-                aMaxCAP = tF(tokens[31]) - 5.*bMaxCAP
-                aMaxCOP = tF(tokens[37]) - 5.*bMaxCOP
-                a_Max.append([aMaxCOP,aMaxCAP])
-                
-    else:   # file directly from NEEP, format different
-        def tF(stringvar):
-            return float((stringvar.replace(',','')).replace('"',''))
+    def tF(stringvar):
+        return float((stringvar.replace(',','')).replace('"',''))
                  
-        # ' Load Heat Pump Data
-        first = True
-        while True:
+    # ' Load Heat Pump Data
+    first = True
+    while True:
             
-            if (LN==len(lines)):
-                break
-            LN += 1
-            if LN<3:
-                continue;
+        if (LN==len(lines)):
+            break
+        LN += 1
+        if LN<3:
+            continue;
                 
-            tokens = lines[LN].split('\t') 
-            if tokens[0]=='': break               
-            if len(tokens)<50 : break
+        tokens = lines[LN].split('\t') 
+        if tokens[0]=='': break               
+        if len(tokens)<50 : break
     
-            part_Number.append({'Manufacturer':tokens[0], 'Model':tokens[2], 'Outdoor Unit':tokens[3], 
-            'Indoor Units':tokens[4],'Variable?':tokens[5],'HSPF(IV)':tokens[6],'SEER':tokens[7],
-            'Type':tokens[10],'Zones':tokens[11]})   
-             
-            try:
-                # calculate linear parameters a and b from the NEEP data
-                tData = [47,17,5]
-                CAPMin = []
-                CAPMax = []
-                COPMin = []
-                COPMax = []
-                CAPMin.append(tF(tokens[13]))
-                CAPMin.append(tF(tokens[23]))
-                CAPMin.append(tF(tokens[33]))
-                CAPMax.append(tF(tokens[15]))
-                CAPMax.append(tF(tokens[25]))
-                CAPMax.append(tF(tokens[35]))
-                COPMin.append(tF(tokens[19]))
-                COPMin.append(tF(tokens[29]))
-                COPMin.append(tF(tokens[39]))
-                COPMax.append(tF(tokens[21]))
-                COPMax.append(tF(tokens[31]))
-                COPMax.append(tF(tokens[41]))
+        heatPump = HeatPump(Manufacturer=tokens[0], Brand=tokens[1], AHRICertNumber=tokens[2], OutdoorUnit=tokens[3],                
+            IndoorUnits=tokens[4],VariableSpeed=tokens[5],HSPFregIV=tokens[6],SEER=tokens[7],EER_95=tokens[8],EnergyStar=tokens[9],
+            DuctedDuctless=tokens[10],Zones=tokens[11])
+        HPList.append(heatPump)
+    
+        try:
+            # calculate linear parameters a and b from the NEEP data
+            tData = [47,17,5]
+            CAPMin = []
+            CAPRated = []
+            CAPMax = []
+            COPMin = []
+            COPRated = []
+            COPMax = []
+            CAPMin.append(tF(tokens[13]))
+            CAPMin.append(tF(tokens[23]))
+            CAPMin.append(tF(tokens[33]))
+#            CAPRated.append(tF(tokens[14]))
+#            CAPRated.append(tF(tokens[24]))
+#            CAPRated.append(tF(tokens[34]))
+            CAPMax.append(tF(tokens[15]))
+            CAPMax.append(tF(tokens[25]))
+            CAPMax.append(tF(tokens[35]))
+            
+            COPMin.append(tF(tokens[19]))
+            COPMin.append(tF(tokens[29]))
+            COPMin.append(tF(tokens[39]))
+#            COPRated.append(tF(tokens[20]))
+#            COPRated.append(tF(tokens[30]))
+#            COPRated.append(tF(tokens[40]))
+            COPMax.append(tF(tokens[21]))
+            COPMax.append(tF(tokens[31]))
+            COPMax.append(tF(tokens[41]))
                 
-                if tokens[47] != 'N/A':
-                    tData.append(tF(tokens[47]))
-                    CAPMin.append(tF(tokens[48]))
-                    CAPMax.append(tF(tokens[50]))
-                    COPMin.append(tF(tokens[54]))
-                    COPMax.append(tF(tokens[56]))
-                    
-                CAPMinD.append(CAPMin)
-                CAPMaxD.append(CAPMax)
-                COPMinD.append(COPMin)
-                COPMaxD.append(COPMax)
-                tDataD.append(tData)
+            if tokens[47] != 'N/A':
+                tData.append(tF(tokens[47]))
+                CAPMin.append(tF(tokens[48]))
+#                CAPRated.append(tF(tokens[49]))
+                CAPMax.append(tF(tokens[50]))
+                COPMin.append(tF(tokens[54]))
+#                COPRated.append(tF(tokens[55]))
+                COPMax.append(tF(tokens[56]))
+            
+            heatPump.tData = tData
+            heatPump.CAPMin = CAPMin
+ #           heatPump.CAPRated = CAPRated 
+            heatPump.CAPMax = CAPMax 
+            heatPump.COPMin = COPMin
+ #           heatPump.COPRated = COPRated
+            heatPump.COPMax = COPMax
+                   
+#            heatPump.parametrize()
+            
+        except Exception as e:
+            print(e)
                 
-                # parametrizations of capacity and coefficient of performance
-                c_Min.append([0.0,0.0])
-
-                bMinCAP = (CAPMin[0]-CAPMin[2])/(47-5)
-                bMinCOP = (COPMin[0]-COPMin[2])/(47-5)
-                b_Min.append([bMinCOP,bMinCAP])
-                
-                aMinCAP = CAPMin[2] - 5.*bMinCAP
-                aMinCOP = COPMin[2] - 5.*bMinCOP
-                a_Min.append([aMinCOP,aMinCAP])
-                
-                c_Max.append([0.0,0.0])
-                
-                bMaxCAP = (CAPMax[0]-CAPMax[2])/(47-5)
-                bMaxCOP = (COPMax[0]-COPMax[2])/(47-5)
-                b_Max.append([bMaxCOP,bMaxCAP])
-                
-                aMaxCAP = CAPMax[2] - 5.*bMaxCAP
-                aMaxCOP = COPMax[2] - 5.*bMaxCOP
-                a_Max.append([aMaxCOP,aMaxCAP])
-            except Exception as e:
-                print(e)
-                
-    HP_MAX = len(part_Number)
 def LoadTempDataRaw():
     
     T_Outdoor.clear()
@@ -672,7 +585,7 @@ def LoadTempDataRaw():
                 T_Outdoor.append(temp)                
                 nextHour = nextHour+oneHour  
             
-def LoadTempData():
+def LoadTempData():     # OBSOLETE
     # Load climatic data
     # Find location of the start of the year of the heating period
 
@@ -729,6 +642,8 @@ def animate(i):
 #    sellPrices = (sells["price"]).tolist()
     global updateGraph
 
+    hp = HPList[HPiD]
+    
     if updateGraph :
     
 #        a = plt.subplot2grid((6,4), (0,0), rowspan = 5, colspan = 4)
@@ -741,7 +656,7 @@ def animate(i):
     
         a.legend(bbox_to_anchor=(0,0.92,1,.102),loc=3, ncol=3, borderaxespad=0)
         
-        title = "Heat Pump Performance for "+part_Number[HPiD]['Manufacturer']+' Model '+part_Number[HPiD]['Outdoor Unit']
+        title = "Heat Pump Performance for "+hp.Manufacturer + " Model " + hp.OutdoorUnit
         a.set_title(title)
         f.canvas.draw()
         
@@ -792,7 +707,10 @@ class StartPage(tk.Frame) :
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
         
-        label=ttk.Label(self,text="PRELIMINARY: This heat pump analysis tool is a prototype which has been adaptated\n from the Tufts ME145 Spring 2015 project by J.Kadako et al.\nIt has limited applicability and needs to be extended to be useful\nUse at your own risk",font=NORM_FONT)        
+        label=ttk.Label(self,text="PRELIMINARY: This heat pump analysis tool is a prototype which has been adaptated\n"+
+        "from the Tufts ME145 Spring 2015 project by J.Kadako et al.\n"+
+        "It has limited applicability and needs to be extended to be useful\n"+
+        "Use at your own risk",font=NORM_FONT)        
         label.pack(pady=10,padx=10)
 
         label2=ttk.Label(self,text="Copyright 2015, Town of Concord Comprehensive Sustainable Energy Committee",font=SMALL_FONT)        
@@ -807,8 +725,7 @@ class StartPage(tk.Frame) :
 
         def showLicense():
             input = open("LICENSE")
-            text = input.read()
-            
+            text = input.read()            
             popupmsg("License Information",text)
 
         button0 = ttk.Button(self,text="License Information",
@@ -824,53 +741,64 @@ class HomePage(tk.Frame) :
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
         
-        label=ttk.Label(self,text="Home Page",font=LARGE_FONT)
-        
+        label=ttk.Label(self,text="Home Page",font=LARGE_FONT)        
         label.pack(pady=10,padx=10)
         
-#        text1=ttk.Label(self,text="Analysis results to show here",font=NORM_FONT)
+        statusBar = tk.Label(self,text="Status: idle",font=SMALL_FONT,bd=1,relief=SUNKEN,anchor=W)        
+        statusBar.pack(side=BOTTOM, fill=X)
+        
         text1=tk.Text(self,font=NORM_FONT, height=30, width=90)
         text1.insert(END,"\nResults:\n")
-        button1 = ttk.Button(self,text="Baseline Heating Scenario",
+        button1 = ttk.Button(self,width=26,text="Baseline Heating Scenario",
                     command = lambda: controller.show_frame(BaselineHeatingPage))
         button1.pack()
 
-        button2 = ttk.Button(self,text="Fuel Purchase History",
+        button2 = ttk.Button(self,width=26,text="Fuel Purchase History",
                     command = lambda: controller.show_frame(FuelDeliveryPage))
         button2.pack()
 
-        button3 = ttk.Button(self,text="Select Heat Pump Options",
+        button3 = ttk.Button(self,width=26,text="Select Heat Pump Options",
                     command = lambda: controller.show_frame(SelectHeatPumpPage))
         button3.pack()
 
-        button4 = ttk.Button(self,text="Do Analysis",
-                    command = lambda: doHeatPumpAnalysis(self, text1))
+        button4 = ttk.Button(self,width=26,text="Do Analysis",
+                    command = lambda: doHeatPumpAnalysis(statusBar, text1))
         button4.pack()
 
-        button5 = ttk.Button(self,text="Show Graph",
+        button5 = ttk.Button(self,width=26,text="Show Graph",
                     command = lambda: controller.show_frame(GraphPage))
         button5.pack()
         
-        buttonQ = ttk.Button(self,text = "Quit", command = quit)
+        buttonQ = ttk.Button(self,width=26,text = "Quit", command = quit)
         buttonQ.pack()
-        
+
         text1.pack()
 
-def doHeatPumpAnalysis(where,text): 
+def doHeatPumpAnalysis(status,text): 
     global updateGraph
     global HPiD
     
 #    H = 13   #   the heat pump chosen
+    status.config(text="Loading temperature data for period")
+    status.update()
     LoadTempDataRaw()
 #   LoadTempData()      # old version, reading from a spreadsheet file
+
+    status.config(text="Calculating home thermal resistance")
+    status.update()
     approxResistance()
+
+    status.config(text="Analyzing heat pump performance")
+    status.update()
     p = heatPumpPerformance(HPiD)
+
+    status.config(text="Saving results")
+    status.update()
     outputData(HPiD)
     
     totSavings = totBaseEmissions = totHPEmissions = totSuppEmissions = 0.
 
-#    text.delete(where,0)
-    results = "\nAnalysis of heat pump performance for "+part_Number[HPiD]['Manufacturer']+' Model '+part_Number[HPiD]['Outdoor Unit']+"\n\n"
+    results = "\nAnalysis of heat pump performance for " + HPList[HPiD].Manufacturer + ' Model ' + HPList[HPiD].OutdoorUnit +"\n\n"
     results += "\tBaseline ("+BaseHeatType+")\t\t\tHeat Pump\t\t\tSupplemental ("+SuppHeatType+")\n"
     results += "Year\t"+BaseEnergyUnits+"\tCost\t\tKWh\tCost\t\t#days\t"+SuppEnergyUnits+"\tCost\n"
     startYear = t_Data[t_Start].year
@@ -900,7 +828,6 @@ def doHeatPumpAnalysis(where,text):
     text.insert(END,results)
     
     updateGraph = True
-    
 
 def LoadDeliveriesDlg(parent,listbox,lbHdr) :
     
@@ -910,14 +837,10 @@ def LoadDeliveriesDlg(parent,listbox,lbHdr) :
         print("no file selected")
     else:
         loadFuelDeliveries(fname)
-
-    UpdateDeliveryHdrView(lbHdr)
-    
-    UpdateDeliveryDataView(listbox)
+        UpdateDeliveryHdrView(lbHdr)    
+        UpdateDeliveryDataView(listbox)
     
 def SaveDeliveriesDlg() :
- #   root = tk.Tk()
- #   root.wm_title()
     
     fname = filedialog.asksaveasfilename(filetypes=( ("text files","*.txt"),("All files","*.*") ), 
     title="Select file to save fuel deliveries data" )
@@ -927,8 +850,8 @@ def SaveDeliveriesDlg() :
 
 def UpdateDeliveryDataView(listbox):
     listbox.delete(0,END)
-    for h in range(numDeliveries-1) :
-        datastring = "\t\t%s\t\t$%.2f\t\t%.1f" % (purchase_Date[h],purchase_Cost[h],purchase_Vol[h])
+    for h in range(numDeliveries) :
+        datastring = "\t\t%s\t\t$%.2f\t\t%.1f" % (purchase_Date[h],purchase_Cost[h],purchase_Quantity[h])
         listbox.insert(h,datastring)
 
 def UpdateDeliveryHdrView(lb):
@@ -942,67 +865,6 @@ def UpdateDeliveryHdrView(lb):
     else:
         lb.insert(0,"\t\tNo delivery data entered")
     
-class AddDeliveryDlg(tkSimpleDialog.Dialog):
-    """Dialog box that displays a calendar and returns the selected date"""
-    
-        
-    def body(self, master):
-#        self.calendar = ttkcalendar.Calendar(master)
-#        self.calendar.pack()
-        lblDate = ttk.Label(self,text="Delivery Date",font=SMALL_FONT)
-        lblDate.pack()
-#        self.lblDate.grid(row=3, column=1)
-        today = datetime.date.today()
-        dateString =datetime.date.isoformat(today)
-#        deliveryDate = StringVar()
- #       deliveryDate.set(dateString)
-        def setDeliveryDate():
-            cd = CalendarDialog(self)
-            dateString = datetime.date(cd.result.year, cd.result.month, cd.result.day).isoformat()
-            deliveryDate.set(dateString)
-            txtDate.delete(0,END)
-            txtDate.insert( 0,dateString)       
-        def updateDeliveryList():
-            pass
-        txtDate = Entry(self, width=10, textvariable=deliveryDate)
-#        txtDate.grid(row=3, column=2)
-        txtDate.pack()
-        txtDate.delete(0, END)
-        txtDate.insert(0,dateString)
-        
-        btnDate = tk.Button(self, text="Calendar", command=lambda: setDeliveryDate())
-#        btnDate.grid(row=3, column=2)
-        self.btnDate.pack()
-
-        self.lblAmount = ttk.Label(self,text="Quantity",font=SMALL_FONT)
-        self.lblAmount.pack()
-        deliveryAmount = StringVar()
-        txtAmount = tk.Entry(self, width=10, textvariable=deliveryAmount)
-#        txtAmount.grid(row=3, column=2)
-        txtAmount.pack()
-        
-        lblCost = ttk.Label(self,text="Total Cost",font=SMALL_FONT)
-        lblCost.pack()
-        deliveryCost = StringVar()
-        txtCost = tk.Entry(self, width=10, textvariable=deliveryCost)
-#        txtCost.grid(row=3, column=2)
-        txtCost.pack()
-        
-        btnUpdate = tk.Button(self, text="Add and continue", command=lambda: updateDeliveryList())
-#        btnUpdate.grid(row=3, column=2)
-        btnUpdate.pack()
-
-    def apply(self):
-        result = (date,deliveryAmount,deliveryCost)
-            
-def AddDelivery(self,listbox):
-    # dialog to inquire date cost and volume
-    dDate,dCost,dAmount = AddDeliveryDlg(self)
-    # find location in list
-    
-    # insert into lists
-    
-    UpdateDeliveryDataView(listbox)
         
 def ClearDeliveryData(self,listbox):
     # are you sure
@@ -1012,35 +874,86 @@ def ClearDeliveryData(self,listbox):
     numDeliveries = 0
     purchase_Date.clear()
     purchase_Cost.clear()
-    purchase_Vol.clear()
+    purchase_Quantity.clear()
     
     # Update the listbox
     
     UpdateDeliveryDataView(listbox)
         
-def DeleteDelivery(listbox):
-    # inquire "Are you sure" (proceed, cancel options, with don't ask again option)
-    
-    # get index to delivery
-    
-    # delete entry from lists
-    
-    UpdateDeliveryDataView(listbox)
-        
-def EditDelivery(listbox):
-    # dialog with delivery info to modify (with save, cancel options)
-    
-    # if date changed, get new index
-        # delete from existing loc, insert into new loc
-    
-    # update entry in lists
-    
-    UpdateDeliveryDataView(listbox)
         
 class FuelDeliveryPage(tk.Frame):
     global fuelDeliveryHeader
     
+    def AddDelivery(self,listbox):
+        global numDeliveries
+        # dialog to inquire date cost and volume
+        cd = CalendarDialog(self,month=self.lastmonth,year=self.lastyear)
+        dDate=cd.result
+        self.lastmonth=dDate.month
+        self.lastyear=dDate.year
+        
+        dc=GetFloat("Enter $ cost (w/o $ sign)",default=self.lastcost)
+        dCost=dc.result
+        self.lastcost=dCost
+        
+        da=GetFloat("Enter amount",default=self.lastamount)
+        dAmount=da.result
+        self.lastamount=dAmount
+        
+        # find location in list
+        id = 0
+        for date in purchase_Date:
+            if date < dDate:
+                id = purchase_Date.index(date)+1
+            
+        # insert into lists
+        numDeliveries += 1
+        purchase_Date.insert(id,dDate)
+        purchase_Cost.insert(id,dCost)
+        purchase_Quantity.insert(id,dAmount)
+                
+        UpdateDeliveryDataView(listbox)
+
+    def EditDelivery(self,listbox):
+        global numDeliveries
+
+        # get index to delivery
+        sel = listbox.curselection()
+        if len(sel)>0:
+            id = sel[0]
+        
+            date = purchase_Date[id]
+            cost = purchase_Cost[id]
+            amount = purchase_Quantity[id]
+            
+            
+        # if date changed, get new index
+            # delete from existing loc, insert into new loc
+        
+        # update entry in lists
+        
+        UpdateDeliveryDataView(listbox)
+
+    def DeleteDelivery(self,listbox):
+        global numDeliveries
+        # inquire "Are you sure" (proceed, cancel options, with don't ask again option)
+        
+        # get index to delivery
+        sel = listbox.curselection()
+        if len(sel)>0:
+            id = sel[0]
+        
+            # delete entry from lists
+            numDeliveries -= 1
+            del purchase_Date[id]
+            del purchase_Cost[id]
+            del purchase_Quantity[id]
+            
+            UpdateDeliveryDataView(listbox)
+        
     def __init__(self,parent,controller):
+        global current_Heating_Year
+        
         tk.Frame.__init__(self,parent)
         label=ttk.Label(self,text="Fuel Deliveries Page: This is for current oil customers",font=LARGE_FONT)        
         label.grid(row=0,column=0,columnspan=4,sticky=(E,W), pady=10,padx=10)
@@ -1074,15 +987,15 @@ class FuelDeliveryPage(tk.Frame):
         button4.grid(row=9,column=1)
 
         button5 = ttk.Button(self,text="Add Delivery",
-                    command = lambda: AddDelivery(self,lbData))
+                    command = lambda: self.AddDelivery(lbData))
         button5.grid(row=4,column=4)
 
         button6 = ttk.Button(self,text="Edit Delivery",
-                    command = lambda: EditDelivery(self,lbData))
+                    command = lambda: self.EditDelivery(lbData))
         button6.grid(row=5,column=4)
 
         button7 = ttk.Button(self,text="Delete Delivery",
-                    command = lambda: DeleteDelivery(self,lbData))
+                    command = lambda: self.DeleteDelivery(lbData))
         button7.grid(row=6,column=4)
 
         button7 = ttk.Button(self,text="Delete All Deliveries",
@@ -1094,7 +1007,13 @@ class FuelDeliveryPage(tk.Frame):
         
         UpdateDeliveryHdrView(lbHdr)    
         UpdateDeliveryDataView(lbData)
+        
+        self.lastmonth=1
+        self.lastyear=current_Heating_Year
+        self.lastcost=0.0
+        self.lastamount=0.0
             
+
 class BaselineHeatingPage(tk.Frame):
     global EfficiencyHVAC
     def __init__(self,parent,controller):
@@ -1108,11 +1027,11 @@ class BaselineHeatingPage(tk.Frame):
         BLType = IntVar()
         BLType.set(0)
         
-        rb1 = tk.Radiobutton(self, text=BASE_HEAT_NAME_OIL,      variable=BLType, value=0, command=lambda: SetBLScenario(BASE_HEAT_TYPE_OIL))
-        rb2 = tk.Radiobutton(self, text=BASE_HEAT_NAME_GAS,  variable=BLType, value=1, command=lambda: SetBLScenario(BASE_HEAT_TYPE_GAS))
-        rb3 = tk.Radiobutton(self, text=BASE_HEAT_NAME_ELEC,  variable=BLType, value=2, command=lambda: SetBLScenario(BASE_HEAT_TYPE_ELEC))
-        rb4 = tk.Radiobutton(self, text=BASE_HEAT_NAME_LPG,  variable=BLType, value=3, command=lambda: SetBLScenario(BASE_HEAT_TYPE_LPG))
-        rb5 = tk.Radiobutton(self, text="Other",  variable=BLType, value=4, command=lambda: SetBLScenario(BASE_HEAT_TYPE_OTHER))
+        rb1 = tk.Radiobutton(self, text=BASE_HEAT_NAME_OIL, variable=BLType, value=0, command=lambda: SetBLScenario(BASE_HEAT_TYPE_OIL))
+        rb2 = tk.Radiobutton(self, text=BASE_HEAT_NAME_GAS, variable=BLType, value=1, command=lambda: SetBLScenario(BASE_HEAT_TYPE_GAS))
+        rb3 = tk.Radiobutton(self, text=BASE_HEAT_NAME_ELEC,variable=BLType, value=2, command=lambda: SetBLScenario(BASE_HEAT_TYPE_ELEC))
+        rb4 = tk.Radiobutton(self, text=BASE_HEAT_NAME_LPG, variable=BLType, value=3, command=lambda: SetBLScenario(BASE_HEAT_TYPE_LPG))
+        rb5 = tk.Radiobutton(self, text="Other",            variable=BLType, value=4, command=lambda: SetBLScenario(BASE_HEAT_TYPE_OTHER))
 
         rb1.grid(row=2,column=0)
         rb2.grid(row=2,column=1)
@@ -1146,7 +1065,7 @@ class BaselineHeatingPage(tk.Frame):
 
               
         def setStartDate() :
-            cd = CalendarDialog(self)
+            cd = CalendarDialog(self,year=2012,month=7)
             turn_ON_Date = datetime.date(cd.result.year, cd.result.month, cd.result.day)         
             print (turn_ON_Date)
         def setEndDate() :
@@ -1158,11 +1077,11 @@ class BaselineHeatingPage(tk.Frame):
         label3.grid(row=4,column=0,columnspan=3,pady=30,padx=10)
             
         button2 = ttk.Button(self,text="Start Date",
-                    command = lambda: setStartDate())
+                    command = setStartDate)
         button2.grid(row=4,column=3)
 
         button3 = ttk.Button(self,text="End Date",
-                    command = lambda: setEndDate())
+                    command = setEndDate)
         button3.grid(row=4,column=4)
 
         button4 = ttk.Button(self,text="Done",
@@ -1173,60 +1092,41 @@ def selHeatPump(H):
     global HPiD
     global firstPlot
 
-    
     HPiD = H
-
-    COPMax = []
-    COPMin = []
-    CAPMax = []
-    CAPMin = []
-            
-    tMin=-5
-    if len(tDataD[HPiD])>3 : tMin = tDataD[HPiD][3]
-    
-    if tMin>-20 and tMin<60 :
-        tempArray=[tMin, 60]        
-    else :
-        tempArray = list(range(-20,60,2))
-        
-    for i in range(len(tempArray)):
-        t = tempArray[i]
-        COPMax.append(t*t*c_Max[HPiD][0] + t*b_Max[HPiD][0] + a_Max[HPiD][0])
-        COPMin.append(t*t*c_Min[HPiD][0] + t*b_Min[HPiD][0] + a_Min[HPiD][0])
-        CAPMax.append(t*t*c_Max[HPiD][1] + t*b_Max[HPiD][1] + a_Max[HPiD][1])
-        CAPMin.append(t*t*c_Min[HPiD][1] + t*b_Min[HPiD][1] + a_Min[HPiD][1])
-                
+    heatPump = HPList[HPiD]
+                    
     a1.clear()
             
     if firstPlot:
-        l1c, = a1.plot(tDataD[HPiD],COPMaxD[HPiD], linestyle='-', color="red", marker='*', markersize=10,label = "COP (max capacity)") 
-        l1d, = a1.plot(tDataD[HPiD],COPMinD[HPiD], linestyle='-', color="blue", marker=r'*', markersize=10, label = "COP (min capacity)") 
+        l1c, = a1.plot(heatPump.tData, heatPump.COPMax, linestyle='-', color="red", marker='*', markersize=10,label = "COP (max capacity)") 
+        l1d, = a1.plot(heatPump.tData, heatPump.COPMin, linestyle='-', color="blue", marker=r'*', markersize=10, label = "COP (min capacity)") 
     else:
-        l1c.set_xdata(tDataD[HPiD])
-        l1c.set_ydata(COPMaxD[HPiD])
-        l1d.set_xdata(tDataD[HPiD])
-        l1d.set_ydata(COPMinD[HPiD])
+        l1c.set_xdata(heatPump.tData)
+        l1c.set_ydata(heatPump.COPMax)
+        l1d.set_xdata(heatPump.tData)
+        l1d.set_ydata(heatPump.COPMin)
 
+    tMin = heatPump.tData[-1]
     a1.set_xlim(tMin-5., 60)
     a1.set_ylim(ymin=0.,ymax=6.)
     a1.legend(bbox_to_anchor=(0,0.80,1,.1),loc=3, ncol=3, borderaxespad=0)
         
-    title = "COP for "+part_Number[HPiD]['Manufacturer']+' Model '+part_Number[HPiD]['Outdoor Unit']
+    title = "COP for " + heatPump.Manufacturer +" Model " + heatPump.OutdoorUnit
     a1.set_title(title)
 
     a2.clear()
     if firstPlot:
                 
-        l2c, = a2.plot(tDataD[HPiD],CAPMaxD[HPiD], linestyle='-', color="red", marker=r'*', markersize=10, label = "Max capacity") 
-        l2d, = a2.plot(tDataD[HPiD],CAPMinD[HPiD], linestyle='-', color="blue", marker=r'*', markersize=10, label = "Min capacity") 
+        l2c, = a2.plot(heatPump.tData, heatPump.CAPMax, linestyle='-', color="red", marker=r'*', markersize=10, label = "Max capacity") 
+        l2d, = a2.plot(heatPump.tData, heatPump.CAPMin, linestyle='-', color="blue", marker=r'*', markersize=10, label = "Min capacity") 
         title = "Capacity vs temperature"
         a2.set_title(title)
         a2.legend(bbox_to_anchor=(0,0.80,1,.1),loc=3, ncol=3, borderaxespad=0)
     else:
-        l2c.set_xdata(tDataD[HPiD])
-        l2c.set_ydata(CAPMaxD[HPiD])
-        l2d.set_xdata(tDataD[HPiD])
-        l2d.set_ydata(CAPMinD[HPiD])
+        l2c.set_xdata(heatPump.tData)
+        l2c.set_ydata(heatPump.CAPMax)
+        l2d.set_xdata(heatPump.tData)
+        l2d.set_ydata(heatPump.CAPMin)
     a2.set_ylim(ymin=0.,ymax=60000.)
                 
     f1.canvas.draw()
@@ -1248,17 +1148,21 @@ class SelectHeatPumpPage(tk.Frame):
         HPType.set(0)
                     
         def FillHPListBox(lb, filterVar):
+            HPListIndex2ID.clear()
             lb.delete(0,lb.size())
             filter = filterVar    # the string variable
             filter = HPFilter[filter]
-            for h in range(HP_MAX):
-                ductless = (part_Number[h]['Type'] == 'Ductless')
+            h = 0
+            for hp in HPList:
+                ductless = (hp.DuctedDuctless == 'Ductless')
                 if ( (ductless and (filter=='Ductless' or filter=='All')) or ((not ductless) and (filter != 'Ductless'))) :
-                    insertText = part_Number[h]['Manufacturer']+" Model "+part_Number[h]['Model']+" "+part_Number[h]['Type']
-                    if part_Number[h]['Type'] == 'Ductless':
-                        insertText+='-'+part_Number[h]['Zones']
+                    insertText = hp.Manufacturer + " Model " + hp.OutdoorUnit + " " + hp.DuctedDuctless
+                    if hp.DuctedDuctless == 'Ductless': insertText+='-' + hp.Zones
+                        
                     lb.insert(h,insertText)
                     HPListIndex2ID.append(h)
+                h += 1
+            print("Heat pump list filled")
 
         rb1 = tk.Radiobutton(self, text="Ductless", variable=HPType, value=0, command=lambda: FillHPListBox(lb,0))
         rb2 = tk.Radiobutton(self, text="Ducted",   variable=HPType, value=1, command=lambda: FillHPListBox(lb,1))
@@ -1353,7 +1257,7 @@ def approxResistance():
  
     p = numDeliveries-1
     last_Purchase = p
-    if purchase_Vol[p] == 0 :
+    if purchase_Quantity[p] == 0 :
                 last_Purchase = p - 1
     
     while t<len(t_Data):    # (t_Start == 0) or (t_End == 0):
@@ -1393,8 +1297,8 @@ def approxResistance():
         year = purchase_Date[p].year
         Y = year - startYear
         if year <= endYear:
-            total_Vol = purchase_Vol[p] + total_Vol
-            BaseUnitsByYear[Y] += purchase_Vol[p]
+            total_Vol = purchase_Quantity[p] + total_Vol
+            BaseUnitsByYear[Y] += purchase_Quantity[p]
             BaseCostByYear[Y] += purchase_Cost[p]
 
     # Calculate the average resistance per heating period
@@ -1413,21 +1317,21 @@ def approxResistance():
 
             # Sum app eligible delta_T during each heating period
     
-            approx_Resistance[p][1] += (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * purchase_Vol[p + 1] * BaseEnergyContent)
+            approx_Resistance[p][1] += (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * purchase_Quantity[p + 1] * BaseEnergyContent)
     
         else:
             if isHeating(t) and (purchase_Date[p + 1] <= thisDate) and (thisDate <= purchase_Date[last_Purchase]) and (p < last_Purchase): 
                 # this particular time sample belongs to the next purchase period
                 p = p + 1
                 approx_Resistance[p][0] = t
-                approx_Resistance[p][1] =  (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * purchase_Vol[p + 1] * BaseEnergyContent)
+                approx_Resistance[p][1] =  (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * purchase_Quantity[p + 1] * BaseEnergyContent)
     
  
     # Average resistance during the heating period
     average_Resistance = delta_T / (BaseHvacEfficiency * BaseEnergyContent * total_Vol)
 
     
-def heatPumpPerformance(H):
+def heatPumpPerformance(h):
     #Author: Jonah Kadoko
     #this function calculates the approximate min, and max heating capacity, COPave and average electrical consumption
     #One would expect that the required heat be in between the max and min heating capacities
@@ -1436,6 +1340,8 @@ def heatPumpPerformance(H):
     global average_Resistance
     global Q_required, timeArray
     global capacity_Max, capacity_Min, electric_Required, supplemental_Heat, COP_Ave
+
+    hp = HPList[h]
 
     use_Average_R = True
     
@@ -1472,10 +1378,7 @@ def heatPumpPerformance(H):
             KWhByYear.append(0.0)
             SuppUnitsByYear.append(0.0)
             SuppUsesByYear.append(0)
-            BaseUnitsByYear.append(0.0)
-#BaseCostByYear.clear()
-                    
-        
+            BaseUnitsByYear.append(0.0)        
         
         # Calculate the perfomance
         if (use_Average_R) : 
@@ -1483,60 +1386,30 @@ def heatPumpPerformance(H):
         else :
             resistance = approx_Resistance[p][1]
 
+
+        temp = T_Outdoor[t]
+        CAP_Max = hp.MaxCapacity(temp)
+        CAP_Min = hp.MinCapacity(temp)    
+        COP_Min = hp.COPatMinCapacity(temp)
+        COP_Max = hp.COPatMaxCapacity(temp)
+
         if isHeating(t):
     
             if (purchase_Date[p] <= t_Data[t].date()) and (t_Data[t].date() <= purchase_Date[p + 1]) and (p < last_Purchase) :
                 # Sum app eligible delta_T during each heating period
-                Q_required[ti] = (T_Indoor - T_Outdoor[t])/ resistance
+                Q_required[ti] = (T_Indoor - temp)/ resistance
             else:
                 if (purchase_Date[p + 1] <= t_Data[t].date()) and (t_Data[t].date() <= purchase_Date[last_Purchase]) and (p < last_Purchase) :
                     # this particular time sample belongs to the next purchase period
                     p = p + 1
-                    Q_required[ti] = (T_Indoor - T_Outdoor[t]) / resistance
+                    Q_required[ti] = (T_Indoor - temp) / resistance
     
-                else:
-                    #'Most likely this data point should not be heated or it falls out of the purchase period
-                    print('Do nothing')
-        
-        
-        # using the two point parametrization?
-        twoPointFit = False
-        
-        if twoPointFit:
-            # Calculate electrical energy required per heat pump
-            COP_Max = c_Max[H][0] * T_Outdoor[t]**2 + b_Max[H][0] * T_Outdoor[t] + a_Max[H][0]
-            COP_Min = c_Min[H][0] * T_Outdoor[t]**2 + b_Min[H][0] * T_Outdoor[t] + a_Min[H][0]
-            capacity_Max[ti] = c_Max[H][1] * T_Outdoor[t]**2 + b_Max[H][1] * T_Outdoor[t] + a_Max[H][1]
-            capacity_Min[ti] = c_Min[H][1] * T_Outdoor[t]**2 + b_Min[H][1] * T_Outdoor[t] + a_Min[H][1]
         else:
-            if T_Outdoor[t]>tDataD[H][0]:
-                # warmer than the 47 deg point
-                capacity_Max[ti] = CAPMaxD[H][0]
-                capacity_Min[ti] = CAPMinD[H][0]
-                COP_Min = COPMinD[H][0]
-                COP_Max = COPMaxD[H][0]
-            elif T_Outdoor[t] <= tDataD[H][-1]:
-                # colder than the coldest point specified
-                # question as to how heat pump will perform here - assume it doesn't function at that temperature
-                capacity_Max[ti] = CAPMaxD[H][-1]
-                capacity_Min[ti] = CAPMinD[H][-1]
-                COP_Max = COPMaxD[H][-1]
-                COP_Min = COPMinD[H][-1]
-            else:
-                tB = -1
-                for i in range(len(tDataD[H])-1):
-                    if T_Outdoor[t] > tDataD[H][i+1] and T_Outdoor[t]<= tDataD[H][i] : tB = i
-                if tB<0 :
-                    pass    # shouldn't happen
-                else:
-                    # linear interpolation between the nearest reported points
-                    frac = (T_Outdoor[t]-tDataD[H][tB])/float(tDataD[H][tB+1] - tDataD[H][tB])
-                    COP_Max = COPMaxD[H][tB] + frac * (COPMaxD[H][tB+1] - COPMaxD[H][tB])
-                    COP_Min = COPMinD[H][tB] + frac * (COPMinD[H][tB+1] - COPMinD[H][tB]) 
-                    capacity_Max[ti] = CAPMaxD[H][tB] + frac * (CAPMaxD[H][tB+1] - CAPMaxD[H][tB])
-                    capacity_Min[ti] = CAPMinD[H][tB] + frac * (CAPMinD[H][tB+1] - CAPMinD[H][tB])
-            
-            
+            Q_required[ti] = 0
+                
+        capacity_Max[ti] = CAP_Max
+        capacity_Min[ti] = CAP_Min
+                        
         # calculate the average values of the above
         # Linear interpolation, doesn't work well
         # COP_Ave(t, h) = (Q_required(t) - capacity_Min(t, h)) * (COP_Max - COP_Min) / (capacity_Max(t, h) - capacity_Min(t, h)) + COP_Min          
@@ -1583,10 +1456,12 @@ def outputData(HPiD):
     # This routine outputs all results to a text file
     global last_Purchase
     
+    hp = HPList[HPiD]
+    
     outputFile = './Output Data/Heat Pump Analysis.txt'
     output = open(outputFile,'w')
            
-    output.write('Analysis for: '+part_Number[HPiD]['Manufacturer']+' Model '+part_Number[HPiD]['Model']+'\r')
+    output.write('Analysis for: '+hp.Manufacturer +' Model ' +hp.OutdoorUnit +'\r')
     
     
     for tv in range(t_Start,t_End):
@@ -1598,7 +1473,7 @@ def outputData(HPiD):
     
 # initialization code
 initializeData()
-loadData()
+loadHeatPumps()
 
 # main routine 
 

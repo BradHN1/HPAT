@@ -28,8 +28,10 @@ class Dialog(Toplevel):
 
         self.protocol("WM_DELETE_WINDOW", self.cancel)
 
-        self.geometry("+%d+%d" % (parent.winfo_rootx()+50,
-                                  parent.winfo_rooty()+50))
+        if parent != None:
+            rx = parent.winfo_rootx()+50
+            ry = parent.winfo_rooty()+50
+            self.geometry("+%d+%d" % (rx,ry))
 
         self.initial_focus.focus_set()
 
@@ -79,7 +81,8 @@ class Dialog(Toplevel):
     def cancel(self, event=None):
 
         # put focus back to the parent window
-        self.parent.focus_set()
+        if self.parent != None:            
+            self.parent.focus_set()
         self.destroy()
 
     #
