@@ -73,6 +73,7 @@ style.use("ggplot")
 
 HPiD = 0            # index to a single chosen heat pump
 HPList = []         # list of all defined heat pumps
+HPChoice = []       # new: list of chosen heat pumps
 
 BASE_HEAT_TYPE_OIL = 0
 BASE_HEAT_NAME_OIL = "Fuel Oil"
@@ -642,7 +643,12 @@ def animate(i):
 #    sellPrices = (sells["price"]).tolist()
     global updateGraph
 
-    hp = HPList[HPiD]
+    if len(HPChoice)>0 :
+        hp = HPChoice[0]
+    else:
+        return
+        
+#    hp = HPList[HPiD]
     
     if updateGraph :
     
@@ -776,8 +782,12 @@ class HomePage(tk.Frame) :
 
 def doHeatPumpAnalysis(status,text): 
     global updateGraph
-    global HPiD
+#    global HPiD
     
+    hpNames = ""
+    for hp in HPChoice :
+        hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit + "+"
+
 #    H = 13   #   the heat pump chosen
     status.config(text="Loading temperature data for period")
     status.update()
@@ -790,15 +800,18 @@ def doHeatPumpAnalysis(status,text):
 
     status.config(text="Analyzing heat pump performance")
     status.update()
-    p = heatPumpPerformance(HPiD)
+#    p = heatPumpPerformance(HPiD)
+    p = heatPumpPerformance(0)
 
     status.config(text="Saving results")
     status.update()
-    outputData(HPiD)
+#    outputData(HPiD)
+    outputData(0)
     
     totSavings = totBaseEmissions = totHPEmissions = totSuppEmissions = 0.
 
-    results = "\nAnalysis of heat pump performance for " + HPList[HPiD].Manufacturer + ' Model ' + HPList[HPiD].OutdoorUnit +"\n\n"
+#    results = "\nAnalysis of heat pump performance for " + HPList[HPiD].Manufacturer + ' Model ' + HPList[HPiD].OutdoorUnit +"\n\n"
+    results = "\nAnalysis of heat pump performance for " + hpNames +"\n\n"
     results += "\tBaseline ("+BaseHeatType+")\t\t\tHeat Pump\t\t\tSupplemental ("+SuppHeatType+")\n"
     results += "Year\t"+BaseEnergyUnits+"\tCost\t\tKWh\tCost\t\t#days\t"+SuppEnergyUnits+"\tCost\n"
     startYear = t_Data[t_Start].year
@@ -1088,13 +1101,18 @@ class BaselineHeatingPage(tk.Frame):
                     command = lambda: controller.show_frame(HomePage))
         button4.grid(row=10, column=2)
 
-def selHeatPump(H):
-    global HPiD
+
+def selHeatPump(H,info):
+#    global HPiD
     global firstPlot
 
-    HPiD = H
-    heatPump = HPList[HPiD]
-                    
+#    HPiD = H
+    heatPump = HPList[H]
+    if len(HPChoice)==0 :
+        HPChoice.insert(0,heatPump)
+    else:
+        HPChoice[0] = heatPump
+        
     a1.clear()
             
     if firstPlot:
@@ -1130,7 +1148,21 @@ def selHeatPump(H):
     a2.set_ylim(ymin=0.,ymax=60000.)
                 
     f1.canvas.draw()
-    
+    updateHeatPumpInfo(info)
+
+def addHeatPump(H,info):
+    HPChoice.insert(0,None)
+    selHeatPump(H,info)
+ 
+def updateHeatPumpInfo(info):
+    ### update text box with chosen heat pump information"""
+    infoText = ""
+    for hp in HPChoice:
+        infoText+= hp.Manufacturer + "-" + hp.OutdoorUnit + "," + hp.DuctedDuctless + "\n"
+        
+    info.config(text=infoText)
+    info.update()
+        
 class SelectHeatPumpPage(tk.Frame):
     def __init__(self,parent,controller):
         global HPiD
@@ -1178,19 +1210,25 @@ class SelectHeatPumpPage(tk.Frame):
         
         canvas = FigureCanvasTkAgg(f1,self)
         canvas.show()
-        canvas.get_tk_widget().grid(column=3, columnspan=3, row=1, rowspan=3)  #fill=tk.BOTH,,pady=10
+        canvas.get_tk_widget().grid(column=3, columnspan=3, row=1, rowspan=4)  #fill=tk.BOTH,,pady=10
 
         text1 = ttk.Label(self,text='Selected Heat Pump Data',font=NORM_FONT)
         text1.grid(row=3,column=0,columnspan=3,sticky=(N,E,W))
+        
+        text2 = ttk.Label(self,text='',font=NORM_FONT)
+        text2.grid(row=4,column=0,columnspan=3,sticky=(N,E,W))
 
         button1 = ttk.Button(self,text="Select Heat Pump",
-                    command = lambda: selHeatPump(HPListIndex2ID[lb.curselection()[0]]))
+                    command = lambda: selHeatPump(HPListIndex2ID[lb.curselection()[0]],text2))
         button1.grid(row=5, column=0)
   
-        
+        button2 = ttk.Button(self,text="Add Heat Pump",
+                    command = lambda: addHeatPump(HPListIndex2ID[lb.curselection()[0]],text2))
+        button2.grid(row=5, column=1)
+       
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
-        button4.grid(row=5,column=1)        
+        button4.grid(row=5,column=2)        
        
 
 class GraphPage(tk.Frame):
@@ -1341,8 +1379,9 @@ def heatPumpPerformance(h):
     global Q_required, timeArray
     global capacity_Max, capacity_Min, electric_Required, supplemental_Heat, COP_Ave
 
-    hp = HPList[h]
-
+#    hp = HPList[h]
+    hp = HPChoice[0]
+    
     use_Average_R = True
     
     p = 0
@@ -1386,12 +1425,19 @@ def heatPumpPerformance(h):
         else :
             resistance = approx_Resistance[p][1]
 
-
         temp = T_Outdoor[t]
-        CAP_Max = hp.MaxCapacity(temp)
-        CAP_Min = hp.MinCapacity(temp)    
-        COP_Min = hp.COPatMinCapacity(temp)
-        COP_Max = hp.COPatMaxCapacity(temp)
+        CAP_Max = 0
+        CAP_Min = 0  
+        COP_Min = []
+        COP_Max = []
+        np = len(HPChoice)
+
+        for hp in HPChoice:
+            CAP_Max += hp.MaxCapacity(temp)
+            CAP_Min += hp.MinCapacity(temp)
+            
+            COP_Min.append(hp.COPatMinCapacity(temp))
+            COP_Max.append(hp.COPatMaxCapacity(temp))
 
         if isHeating(t):
     
@@ -1409,6 +1455,7 @@ def heatPumpPerformance(h):
                 
         capacity_Max[ti] = CAP_Max
         capacity_Min[ti] = CAP_Min
+        COP_Ave[ti] = 0.0
                         
         # calculate the average values of the above
         # Linear interpolation, doesn't work well
@@ -1418,8 +1465,9 @@ def heatPumpPerformance(h):
         
         # Note times where the heat pump cannot meet demand
         if (Q_required[ti] > capacity_Max[ti]) :
-            
-            COP_Ave[ti] = COP_Max
+            for i in range(np):                
+                COP_Ave[ti] += COP_Max[i]/np
+                
             supplemental_Heat[ti] = Q_required[ti] - capacity_Max[ti]
             SuppUnitsByYear[Y] += supplemental_Heat[ti]/SuppHvacEfficiency/SuppEnergyContent
             
@@ -1435,13 +1483,15 @@ def heatPumpPerformance(h):
         
         else:
             if (Q_required[ti] < capacity_Min[ti]):
-                COP_Ave[ti] = COP_Min
+                for i in range(np):                
+                    COP_Ave[ti] += COP_Min[i]/np
             
             else:
                 #Linear interpolation, doesn't work well
                 #COP_Ave[t] = ((abs(Q_required[t] - capacity_Min[t]) * COP_Min + \
                 #    abs(Q_required[t] - capacity_Max[t]) * COP_Max)) / abs(capacity_Max[t] - capacity_Min[t]) 
-                COP_Ave[ti] = COP_Min + ((Q_required[ti] - capacity_Min[ti]) * (COP_Max - COP_Min)) / (capacity_Max[ti] - capacity_Min[ti]) 
+                for i in range(np):                
+                    COP_Ave[ti] += COP_Min[i] + ((Q_required[ti] - capacity_Min[ti]) * (COP_Max[i] - COP_Min[i])) / (capacity_Max[ti] - capacity_Min[ti]) /np
                 
             # The amount of electricity required to heat the area with Q_required BTUs
             electric_Required[ti] = Q_required[ti] / COP_Ave[ti]/ENERGY_CONTENT_ELEC     
@@ -1456,12 +1506,14 @@ def outputData(HPiD):
     # This routine outputs all results to a text file
     global last_Purchase
     
-    hp = HPList[HPiD]
-    
+    hpNames = ""
+    for hp in HPChoice :
+        hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit 
+        
     outputFile = './Output Data/Heat Pump Analysis.txt'
     output = open(outputFile,'w')
            
-    output.write('Analysis for: '+hp.Manufacturer +' Model ' +hp.OutdoorUnit +'\r')
+    output.write('Analysis for: '+hpNames +'\r')
     
     
     for tv in range(t_Start,t_End):
