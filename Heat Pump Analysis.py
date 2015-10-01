@@ -71,63 +71,78 @@ style.use("ggplot")
 
 # Heat pump parameters
 
-HPiD = 0            # index to a single chosen heat pump
 HPList = []         # list of all defined heat pumps
-HPChoice = []       # new: list of chosen heat pumps
+HPChoice = []       # new: list of chosen heat pumps (objects from HPList, can be repeated)
 
-BASE_HEAT_TYPE_OIL = 0
-BASE_HEAT_NAME_OIL = "Fuel Oil"
+# Heating system types
+
+HEAT_TYPE_OIL = 0
+HEAT_NAME_OIL = "Fuel Oil"
 STANDARD_PRICE_OIL = 3.20                               # Dec 2014 price - varied substantially in 2015
 EFFICIENCY_HVAC_OIL = 0.75
 UNITS_OIL = "Gallons"
 ENERGY_CONTENT_OIL = 139000                             # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_OIL = 72.93*1e-6*ENERGY_CONTENT_OIL
 
-BASE_HEAT_TYPE_GAS = 1
-BASE_HEAT_NAME_GAS = "Natural Gas"
+HEAT_TYPE_GAS = 1
+HEAT_NAME_GAS = "Natural Gas"
 STANDARD_PRICE_GAS = 0.01447                            # average MA price 2015
 EFFICIENCY_HVAC_GAS = 0.90
 UNITS_GAS = "SCF"
 ENERGY_CONTENT_GAS = 1050                               # listed as 950-1150 from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_GAS = 53.06*1e-6*ENERGY_CONTENT_GAS      # http://www.epa.gov/climateleadership/documents/emission-factors.pdf
 
-BASE_HEAT_TYPE_ELEC = 2
-BASE_HEAT_NAME_ELEC = "Electric Resistance"
+HEAT_TYPE_ELEC = 2
+HEAT_NAME_ELEC = "Electric Resistance"
 STANDARD_PRICE_ELEC = 0.15
 EFFICIENCY_HVAC_ELEC = 0.75
 UNITS_ELEC = "KWh"
 ENERGY_CONTENT_ELEC = 3412                              # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_ELEC = (722/2.2)*1e-3
 
-BASE_HEAT_TYPE_LPG = 3
-BASE_HEAT_NAME_LPG = "Propane"
+HEAT_TYPE_LPG = 3
+HEAT_NAME_LPG = "Propane"
 STANDARD_PRICE_LPG = 3.105                              # average Ma LPG price 2015
 EFFICIENCY_HVAC_LPG = 0.75
 UNITS_LPG = "Gallons"
 ENERGY_CONTENT_LPG = 91330                              # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_LPG = 62.*1e-6*ENERGY_CONTENT_LPG
 
-BASE_HEAT_TYPE_OTHER = 4
-BASE_HEAT_NAME_OTHER = "????"
+HEAT_TYPE_OTHER = 4
+HEAT_NAME_OTHER = "????"
 STANDARD_PRICE_OTHER = 999
 EFFICIENCY_HVAC_OTHER = 1.0
 UNITS_OTHER = "???"
 ENERGY_CONTENT_OTHER = 1
 KGCO2_PER_UNIT_OTHER = 0
 
-BaseHeatType = BASE_HEAT_NAME_OIL
+# Baseline heating scenario - for which the usage data applies
+BaseHeatType = HEAT_NAME_OIL
 BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
 BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 BaseEnergyUnits = UNITS_OIL
 BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
 BaseCostPerUnit = STANDARD_PRICE_OIL
 
+# supplemental system - augments the HeatPump system to meet necessary capacity
 SuppHeatType = BaseHeatType
 SuppHvacEfficiency = BaseHvacEfficiency
 SuppEnergyContent = BaseEnergyContent     
 SuppEnergyUnits = BaseEnergyUnits
 SuppKgCO2PerUnit = BaseKgCO2PerUnit
 SuppCostPerUnit = BaseCostPerUnit
+
+# water heating system - augments the HeatPump system to meet necessary capacity
+WaterHeatType = BaseHeatType
+WaterHeatEfficiency = BaseHvacEfficiency
+WaterEnergyContent = BaseEnergyContent
+WaterEnergyUnits = BaseEnergyUnits
+WaterKgCO2PerUnit = BaseKgCO2PerUnit
+WaterCostPerUnit = BaseCostPerUnit
+WaterHeatMonthlyUsage = 0               # in WaterEnergyUnits - which if same as BaseEnergyUnits are subtracted from heat load
+
+#DehumidifierUsage
+# ACUsage
 
 ElecKgCO2PerUnit = KGCO2_PER_UNIT_ELEC
 
@@ -211,36 +226,36 @@ def popupmsg(title, msg):
 def SetBLScenario(BLT) :
     global BaseHeatType,BaseHvacEfficiency,BaseEnergyContent,BaseEnergyUnits,BaseKgCO2PerUnit,BaseCostPerUnit
     global SuppHeatType,SuppHvacEfficiency,SuppEnergyContent,SuppEnergyUnits,SuppKgCO2PerUnit,SuppCostPerUnit
-    if BLT == BASE_HEAT_TYPE_OIL :    # oil
-        BaseHeatType = BASE_HEAT_NAME_OIL
+    if BLT == HEAT_TYPE_OIL :    # oil
+        BaseHeatType = HEAT_NAME_OIL
         BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
         BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_OIL
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
         BaseCostPerUnit = STANDARD_PRICE_OIL
-    elif BLT == BASE_HEAT_TYPE_GAS : # natural gas
-        BaseHeatType = BASE_HEAT_NAME_GAS
+    elif BLT == HEAT_TYPE_GAS : # natural gas
+        BaseHeatType = HEAT_NAME_GAS
         BaseHvacEfficiency = EFFICIENCY_HVAC_GAS
         BaseEnergyContent = ENERGY_CONTENT_GAS     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_GAS
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_GAS
         BaseCostPerUnit = STANDARD_PRICE_GAS
-    elif BLT == BASE_HEAT_TYPE_ELEC : # electric
-        BaseHeatType = BASE_HEAT_NAME_ELEC
+    elif BLT == HEAT_TYPE_ELEC : # electric
+        BaseHeatType = HEAT_NAME_ELEC
         BaseHvacEfficiency = EFFICIENCY_HVAC_ELEC
         BaseEnergyContent = ENERGY_CONTENT_ELEC     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_ELEC
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_ELEC
         BaseCostPerUnit = STANDARD_PRICE_ELEC
-    elif BLT == BASE_HEAT_TYPE_LPG : # propane
-        BaseHeatType = BASE_HEAT_NAME_LPG
+    elif BLT == HEAT_TYPE_LPG : # propane
+        BaseHeatType = HEAT_NAME_LPG
         BaseHvacEfficiency = EFFICIENCY_HVAC_LPG
         BaseEnergyContent = ENERGY_CONTENT_LPG     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
         BaseEnergyUnits = UNITS_LPG
         BaseKgCO2PerUnit = KGCO2_PER_UNIT_LPG
         BaseCostPerUnit = STANDARD_PRICE_LPG
     else:
-        gs = GetString("Specify baseline energy source", default=BASE_HEAT_NAME_OIL)
+        gs = GetString("Specify baseline energy source", default=HEAT_NAME_OIL)
         if gs.result:
             BaseHeatType = gs.result
 
@@ -260,7 +275,7 @@ def SetBLScenario(BLT) :
             BaseKgCO2PerUnit = bhk.result
             
         else:
-            BaseHeatType = BASE_HEAT_NAME_OIL
+            BaseHeatType = HEAT_NAME_OIL
             BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
             BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
             BaseEnergyUnits = UNITS_OIL
@@ -311,27 +326,27 @@ def loadFuelDeliveries(purchasesFile):
         
         if lines[LN].find('Heat source: ')>=0 :
             HeatSource = lines[LN]
-            if HeatSource.find(BASE_HEAT_NAME_OIL)>=0 :
-                SetBLScenario(BASE_HEAT_TYPE_OIL)
-            elif HeatSource.find(BASE_HEAT_NAME_GAS)>=0 :
-                SetBLScenario(BASE_HEAT_TYPE_GAS)
-            elif HeatSource.find(BASE_HEAT_NAME_ELEC)>=0 :
-                SetBLScenario(BASE_HEAT_TYPE_ELEC)
-            elif HeatSource.find(BASE_HEAT_NAME_LPG)>=0 :
-                SetBLScenario(BASE_HEAT_TYPE_LPG)
+            if HeatSource.find(HEAT_NAME_OIL)>=0 :
+                SetBLScenario(HEAT_TYPE_OIL)
+            elif HeatSource.find(HEAT_NAME_GAS)>=0 :
+                SetBLScenario(HEAT_TYPE_GAS)
+            elif HeatSource.find(HEAT_NAME_ELEC)>=0 :
+                SetBLScenario(HEAT_TYPE_ELEC)
+            elif HeatSource.find(HEAT_NAME_LPG)>=0 :
+                SetBLScenario(HEAT_TYPE_LPG)
             
         if lines[LN].find('$$')>=0 :
             LN += 1 
             break;    # locate where the data starts
     print('====================')
 
-    if BaseHeatType == BASE_HEAT_NAME_OIL:
+    if BaseHeatType == HEAT_NAME_OIL:
         lastPrice = STANDARD_PRICE_OIL
-    elif BaseHeatType == BASE_HEAT_NAME_GAS:
+    elif BaseHeatType == HEAT_NAME_GAS:
         lastPrice = STANDARD_PRICE_GAS
-    elif BaseHeatType == BASE_HEAT_NAME_ELEC:
+    elif BaseHeatType == HEAT_NAME_ELEC:
         lastPrice = STANDARD_PRICE_ELEC
-    elif BaseHeatType == BASE_HEAT_NAME_LPG:
+    elif BaseHeatType == HEAT_NAME_LPG:
         lastPrice = STANDARD_PRICE_LPG
     
     first = True
@@ -647,9 +662,7 @@ def animate(i):
         hp = HPChoice[0]
     else:
         return
-        
-#    hp = HPList[HPiD]
-    
+            
     if updateGraph :
     
 #        a = plt.subplot2grid((6,4), (0,0), rowspan = 5, colspan = 4)
@@ -782,7 +795,6 @@ class HomePage(tk.Frame) :
 
 def doHeatPumpAnalysis(status,text): 
     global updateGraph
-#    global HPiD
     
     hpNames = ""
     for hp in HPChoice :
@@ -800,17 +812,14 @@ def doHeatPumpAnalysis(status,text):
 
     status.config(text="Analyzing heat pump performance")
     status.update()
-#    p = heatPumpPerformance(HPiD)
     p = heatPumpPerformance(0)
 
     status.config(text="Saving results")
     status.update()
-#    outputData(HPiD)
     outputData(0)
     
     totSavings = totBaseEmissions = totHPEmissions = totSuppEmissions = 0.
 
-#    results = "\nAnalysis of heat pump performance for " + HPList[HPiD].Manufacturer + ' Model ' + HPList[HPiD].OutdoorUnit +"\n\n"
     results = "\nAnalysis of heat pump performance for " + hpNames +"\n\n"
     results += "\tBaseline ("+BaseHeatType+")\t\t\tHeat Pump\t\t\tSupplemental ("+SuppHeatType+")\n"
     results += "Year\t"+BaseEnergyUnits+"\tCost\t\tKWh\tCost\t\t#days\t"+SuppEnergyUnits+"\tCost\n"
@@ -1040,11 +1049,11 @@ class BaselineHeatingPage(tk.Frame):
         BLType = IntVar()
         BLType.set(0)
         
-        rb1 = tk.Radiobutton(self, text=BASE_HEAT_NAME_OIL, variable=BLType, value=0, command=lambda: SetBLScenario(BASE_HEAT_TYPE_OIL))
-        rb2 = tk.Radiobutton(self, text=BASE_HEAT_NAME_GAS, variable=BLType, value=1, command=lambda: SetBLScenario(BASE_HEAT_TYPE_GAS))
-        rb3 = tk.Radiobutton(self, text=BASE_HEAT_NAME_ELEC,variable=BLType, value=2, command=lambda: SetBLScenario(BASE_HEAT_TYPE_ELEC))
-        rb4 = tk.Radiobutton(self, text=BASE_HEAT_NAME_LPG, variable=BLType, value=3, command=lambda: SetBLScenario(BASE_HEAT_TYPE_LPG))
-        rb5 = tk.Radiobutton(self, text="Other",            variable=BLType, value=4, command=lambda: SetBLScenario(BASE_HEAT_TYPE_OTHER))
+        rb1 = tk.Radiobutton(self, text=HEAT_NAME_OIL, variable=BLType, value=0, command=lambda: SetBLScenario(HEAT_TYPE_OIL))
+        rb2 = tk.Radiobutton(self, text=HEAT_NAME_GAS, variable=BLType, value=1, command=lambda: SetBLScenario(HEAT_TYPE_GAS))
+        rb3 = tk.Radiobutton(self, text=HEAT_NAME_ELEC,variable=BLType, value=2, command=lambda: SetBLScenario(HEAT_TYPE_ELEC))
+        rb4 = tk.Radiobutton(self, text=HEAT_NAME_LPG, variable=BLType, value=3, command=lambda: SetBLScenario(HEAT_TYPE_LPG))
+        rb5 = tk.Radiobutton(self, text="Other",            variable=BLType, value=4, command=lambda: SetBLScenario(HEAT_TYPE_OTHER))
 
         rb1.grid(row=2,column=0)
         rb2.grid(row=2,column=1)
@@ -1101,12 +1110,9 @@ class BaselineHeatingPage(tk.Frame):
                     command = lambda: controller.show_frame(HomePage))
         button4.grid(row=10, column=2)
 
-
 def selHeatPump(H,info):
-#    global HPiD
     global firstPlot
 
-#    HPiD = H
     heatPump = HPList[H]
     if len(HPChoice)==0 :
         HPChoice.insert(0,heatPump)
@@ -1154,6 +1160,10 @@ def addHeatPump(H,info):
     HPChoice.insert(0,None)
     selHeatPump(H,info)
  
+def clearHeatPump(info):
+    HPChoice.clear()
+    updateHeatPumpInfo(info)
+ 
 def updateHeatPumpInfo(info):
     ### update text box with chosen heat pump information"""
     infoText = ""
@@ -1165,7 +1175,6 @@ def updateHeatPumpInfo(info):
         
 class SelectHeatPumpPage(tk.Frame):
     def __init__(self,parent,controller):
-        global HPiD
         HPFilter = ['Ductless','Ducted','All']
 
         HPListIndex2ID = []
@@ -1206,7 +1215,7 @@ class SelectHeatPumpPage(tk.Frame):
         rb1.invoke()
 
         lb.grid(row=2,column=0, rowspan=1,columnspan=3,sticky=(N))
-        lb.activate(HPiD)
+        lb.activate(0)
         
         canvas = FigureCanvasTkAgg(f1,self)
         canvas.show()
@@ -1226,9 +1235,13 @@ class SelectHeatPumpPage(tk.Frame):
                     command = lambda: addHeatPump(HPListIndex2ID[lb.curselection()[0]],text2))
         button2.grid(row=5, column=1)
        
+        button3 = ttk.Button(self,text="Clear Heat Pump selection",
+                    command = lambda: clearHeatPump(text2))
+        button3.grid(row=5, column=2)
+       
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
-        button4.grid(row=5,column=2)        
+        button4.grid(row=6,column=1)        
        
 
 class GraphPage(tk.Frame):
@@ -1502,7 +1515,7 @@ def heatPumpPerformance(h):
     #this could be a perfomance scale for heat pumps
     return 1
     
-def outputData(HPiD):
+def outputData(H):
     # This routine outputs all results to a text file
     global last_Purchase
     
