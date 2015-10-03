@@ -55,7 +55,6 @@ from tkinter import filedialog
 
 from CalendarDialog import *
 from getInput import *
-import AddDeliveryDlg
 
 from HeatPump import *          # new heat pump class
 
@@ -139,7 +138,7 @@ WaterEnergyContent = BaseEnergyContent
 WaterEnergyUnits = BaseEnergyUnits
 WaterKgCO2PerUnit = BaseKgCO2PerUnit
 WaterCostPerUnit = BaseCostPerUnit
-WaterHeatMonthlyUsage = 0               # in WaterEnergyUnits - which if same as BaseEnergyUnits are subtracted from heat load
+WaterHeatMonthlyUsage = 24              # in WaterEnergyUnits - which if same as BaseEnergyUnits are subtracted from heat load
 
 #DehumidifierUsage
 # ACUsage
@@ -213,6 +212,15 @@ a2.set_autoscalex_on(False)
 a2.set_autoscaley_on(False)
 plt.grid(True)
 
+f3 = plt.figure()
+a3 = plt.subplot2grid((3,3), (0,0), rowspan = 4, colspan = 3)
+a3.set_ylabel('Quantity')
+a3.set_xlabel('Date')
+a3.set_ylim(0.,50000.)
+a3.set_autoscalex_on(True)
+a3.set_autoscaley_on(True)
+plt.grid(True)
+
 def popupmsg(title, msg):
     
     popup = tk.Tk()
@@ -283,6 +291,35 @@ def SetBLScenario(BLT) :
             BaseCostPerUnit = STANDARD_PRICE_OIL
         print("Other baseline heating types not supported")
     print("Baseline scenario chosen: "+BaseHeatType)
+
+    # for now, assume supplemental system is same as the baseline system
+    SuppHeatType = BaseHeatType
+    SuppHvacEfficiency = BaseHvacEfficiency
+    SuppEnergyContent = BaseEnergyContent     
+    SuppEnergyUnits = BaseEnergyUnits
+    SuppKgCO2PerUnit = BaseKgCO2PerUnit
+    SuppCostPerUnit = BaseCostPerUnit
+
+def SetBLWScenario(BLT) :
+    global WaterHeatType
+    
+    if BLT == HEAT_TYPE_OIL :    # oil
+        WaterHeatType = HEAT_NAME_OIL
+    if BLT == HEAT_TYPE_ELEC :    # oil
+        WaterHeatType = HEAT_NAME_ELEC
+    if BLT == HEAT_TYPE_GAS :    # oil
+        WaterHeatType = HEAT_NAME_GAS
+    if BLT == HEAT_TYPE_LPG :    # oil
+        WaterHeatType = HEAT_NAME_LPG
+    elif BLT == HEAT_TYPE_OTHER : 
+        gs = GetString("Specify water energy source", default=HEAT_NAME_OIL)
+        if gs.result:
+            WaterHeatType = gs.result
+            
+        else:
+            waterHeatType = BaseHeatType
+        print("Other baseline heating types not supported")
+    print("Water scenario chosen: "+WaterHeatType)
 
     # for now, assume supplemental system is same as the baseline system
     SuppHeatType = BaseHeatType
@@ -861,6 +898,7 @@ def LoadDeliveriesDlg(parent,listbox,lbHdr) :
         loadFuelDeliveries(fname)
         UpdateDeliveryHdrView(lbHdr)    
         UpdateDeliveryDataView(listbox)
+        UpdateDeliveryGraph(parent)
     
 def SaveDeliveriesDlg() :
     
@@ -901,7 +939,61 @@ def ClearDeliveryData(self,listbox):
     # Update the listbox
     
     UpdateDeliveryDataView(listbox)
+    UpdateDeliveryGraph(self)
         
+def UpdateDeliveryGraph(self):
+    updateGraph=True
+    ohehour = datetime.timedelta(hours=1)
+    tArray = []
+    fuel_required = []
+    monthdays = 365/12.
+    months1 = 12.
+    
+    if updateGraph :
+        for i in range(len(purchase_Date)):
+            
+            if i<len(purchase_Date)-1:
+                days = (purchase_Date[i+1]-purchase_Date[i]).days
+            else:
+                days = (purchase_Date[i]-purchase_Date[i-1]).days
+            months0 = months1
+            months1 = days/monthdays
+            
+            time = datetime.datetime(purchase_Date[i].year,purchase_Date[i].month,purchase_Date[i].day,0,0)
+            tArray.append(time)
+            time = datetime.datetime(purchase_Date[i].year,purchase_Date[i].month,purchase_Date[i].day,1,0)
+            tArray.append(time)
+            if i>0:
+                fuel_required.append(purchase_Quantity[i-1]/months0)
+            else:
+                fuel_required.append(purchase_Quantity[i]/months1)
+                
+            fuel_required.append(purchase_Quantity[i]/months1)
+            
+        ta1 = []
+        ta1.append(tArray[0])
+        ta1.append(tArray[0])
+        ta1.append(tArray[-1])
+        ma1 = []
+        ma1.append(0)
+        ma1.append(WaterHeatMonthlyUsage)    
+        ma1.append(WaterHeatMonthlyUsage)
+    
+#        a = plt.subplot2grid((6,4), (0,0), rowspan = 5, colspan = 4)
+#        a2 = plt.subplot2grid((6,4), (5,0), rowspan = 1, colspan = 4, sharex = a)
+
+        a3.clear()
+        a3.plot_date(tArray,fuel_required, "g", label = "Total monthly fuel consumption")   
+        a3.plot_date(ta1, ma1, "r", label = "Fuel for water and cooking")    
+
+        a3.legend(bbox_to_anchor=(0,0.92,1,.102),loc=3, ncol=3, borderaxespad=0)
+        
+        title = "Fuel consumption over time"
+        a3.set_title(title)
+        f3.canvas.draw()
+
+    updateGraph=False
+    
         
 class FuelDeliveryPage(tk.Frame):
     global fuelDeliveryHeader
@@ -935,6 +1027,7 @@ class FuelDeliveryPage(tk.Frame):
         purchase_Quantity.insert(id,dAmount)
                 
         UpdateDeliveryDataView(listbox)
+        UpdateDeliveryGraph(self)
 
     def EditDelivery(self,listbox):
         global numDeliveries
@@ -955,6 +1048,7 @@ class FuelDeliveryPage(tk.Frame):
         # update entry in lists
         
         UpdateDeliveryDataView(listbox)
+        UpdateDeliveryGraph(self)
 
     def DeleteDelivery(self,listbox):
         global numDeliveries
@@ -972,19 +1066,20 @@ class FuelDeliveryPage(tk.Frame):
             del purchase_Quantity[id]
             
             UpdateDeliveryDataView(listbox)
-        
+            UpdateDeliveryGraph(self)
+
     def __init__(self,parent,controller):
         global current_Heating_Year
         
         tk.Frame.__init__(self,parent)
-        label=ttk.Label(self,text="Fuel Deliveries Page: This is for current oil customers",font=LARGE_FONT)        
-        label.grid(row=0,column=0,columnspan=4,sticky=(E,W), pady=10,padx=10)
+        label=ttk.Label(self,text="Fuel Deliveries Page",font=LARGE_FONT)        
+        label.grid(row=0,column=0,columnspan=2,sticky=(E,W), pady=10,padx=10)
         
         lblHdr=ttk.Label(self,text="Delivery header information (select to edit)",font=SMALL_FONT)        
-        lblHdr.grid(row=1,column=1, pady=10)
+        lblHdr.grid(row=1,column=0, pady=10)
 
         lblData=ttk.Label(self,text="Delivery data (select to edit)",font=SMALL_FONT)        
-        lblData.grid(row=3,column=1, pady=10)
+        lblData.grid(row=3,column=0, pady=10)
 
         button1 = ttk.Button(self,text="Load Delivery Data",
                     command = lambda: LoadDeliveriesDlg(self, lbData,lbHdr))
@@ -998,11 +1093,11 @@ class FuelDeliveryPage(tk.Frame):
                     command = lambda: SaveDeliveriesDlg(self))
         button3.grid(row=8,column=2)
 
-        lbHdr = tk.Listbox(self,selectmode=tk.SINGLE,height=2,width=80)
-        lbHdr.grid(row=2,column=0,columnspan=3)
+        lbHdr = tk.Listbox(self,selectmode=tk.SINGLE,height=2,width=40)
+        lbHdr.grid(row=2,column=0,columnspan=2)
 
-        lbData = tk.Listbox(self,selectmode=tk.SINGLE,height=20,width=80)
-        lbData.grid(row=4,column=0,columnspan=3, rowspan=4)
+        lbData = tk.Listbox(self,selectmode=tk.SINGLE,height=20,width=40)
+        lbData.grid(row=4,column=0,columnspan=2, rowspan=4)
 
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
@@ -1010,25 +1105,30 @@ class FuelDeliveryPage(tk.Frame):
 
         button5 = ttk.Button(self,text="Add Delivery",
                     command = lambda: self.AddDelivery(lbData))
-        button5.grid(row=4,column=4)
+        button5.grid(row=4,column=2)
 
         button6 = ttk.Button(self,text="Edit Delivery",
                     command = lambda: self.EditDelivery(lbData))
-        button6.grid(row=5,column=4)
+        button6.grid(row=5,column=2)
 
         button7 = ttk.Button(self,text="Delete Delivery",
                     command = lambda: self.DeleteDelivery(lbData))
-        button7.grid(row=6,column=4)
+        button7.grid(row=6,column=2)
 
-        button7 = ttk.Button(self,text="Delete All Deliveries",
+        button7 = ttk.Button(self,text="Delete All",
                     command = lambda: ClearDeliveryData(self,lbData))
-        button7.grid(row=7,column=4)
+        button7.grid(row=7,column=2)
 
         button8 = ttk.Button(self,text="Edit",command = lambda: EditHeaderInfo())
-        button8.grid(row=2,column=4)
-        
+        button8.grid(row=2,column=2)
+ 
+        canvas = FigureCanvasTkAgg(f3,self)
+        canvas.show()
+        canvas.get_tk_widget().grid(column=3, columnspan=3, row=4, rowspan=4)  #fill=tk.BOTH,,pady=10
+       
         UpdateDeliveryHdrView(lbHdr)    
         UpdateDeliveryDataView(lbData)
+        UpdateDeliveryGraph(self)
         
         self.lastmonth=1
         self.lastyear=current_Heating_Year
@@ -1037,55 +1137,49 @@ class FuelDeliveryPage(tk.Frame):
             
 
 class BaselineHeatingPage(tk.Frame):
-    global EfficiencyHVAC
+    global EfficiencyHVAC, WaterHeatMonthlyUsage
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
-        label=ttk.Label(self,text="Baseline Heating Options: Select alternative system for comparison",font=LARGE_FONT)
+        label=ttk.Label(self,text="Baseline Heating Scenario: the exisiting system with it's fuel consumption specified",font=LARGE_FONT)
         label.grid(row=0,column=2,columnspan=3,pady=10,padx=10)
   
-        label1=ttk.Label(self,text="Select baseline system type, efficiency, and operating parameters",font=SMALL_FONT)
+        label1=ttk.Label(self,text="Baseline heating system type, efficiency, and operating parameters",font=NORM_FONT)
         label1.grid(row=1,column=2,columnspan=3,pady=30,padx=10)
         
         BLType = IntVar()
         BLType.set(0)
         
-        rb1 = tk.Radiobutton(self, text=HEAT_NAME_OIL, variable=BLType, value=0, command=lambda: SetBLScenario(HEAT_TYPE_OIL))
-        rb2 = tk.Radiobutton(self, text=HEAT_NAME_GAS, variable=BLType, value=1, command=lambda: SetBLScenario(HEAT_TYPE_GAS))
-        rb3 = tk.Radiobutton(self, text=HEAT_NAME_ELEC,variable=BLType, value=2, command=lambda: SetBLScenario(HEAT_TYPE_ELEC))
-        rb4 = tk.Radiobutton(self, text=HEAT_NAME_LPG, variable=BLType, value=3, command=lambda: SetBLScenario(HEAT_TYPE_LPG))
-        rb5 = tk.Radiobutton(self, text="Other",            variable=BLType, value=4, command=lambda: SetBLScenario(HEAT_TYPE_OTHER))
+        rb1 = tk.Radiobutton(self, width=16, text=HEAT_NAME_OIL, variable=BLType, value=0, command=lambda: SetBLScenario(HEAT_TYPE_OIL))
+        rb2 = tk.Radiobutton(self, width=16, text=HEAT_NAME_GAS, variable=BLType, value=1, command=lambda: SetBLScenario(HEAT_TYPE_GAS))
+        rb3 = tk.Radiobutton(self, width=16, text=HEAT_NAME_ELEC,variable=BLType, value=2, command=lambda: SetBLScenario(HEAT_TYPE_ELEC))
+        rb4 = tk.Radiobutton(self, width=16, text=HEAT_NAME_LPG, variable=BLType, value=3, command=lambda: SetBLScenario(HEAT_TYPE_LPG))
+        rb5 = tk.Radiobutton(self, width=16, text="Other",       variable=BLType, value=4, command=lambda: SetBLScenario(HEAT_TYPE_OTHER))
 
-        rb1.grid(row=2,column=0)
-        rb2.grid(row=2,column=1)
-        rb3.grid(row=2,column=2)
-        rb4.grid(row=2,column=3)
-        rb5.grid(row=2,column=4)
+        rb1.grid(row=2,column=0,padx=20)
+        rb2.grid(row=3,column=0,padx=20)
+        rb3.grid(row=4,column=0,padx=20)
+        rb4.grid(row=5,column=0,padx=20)
+        rb5.grid(row=6,column=0,padx=20)
         rb1.invoke()
         
-#        def getEfficiency():
-#            global EFFICIENCY_HVAC
-#            EFFICIENCY_HVAC = float1.getDouble()
-        def evaluate(event):
-            s = eff.get() 
+        def getEfficiency(self):
+            s = GetInt("Enter system efficiency in %", default=100*BaseHvacEfficiency, min=10, max=100)
+            eff = s.result
             try:
-                efficiency = float(s)
-                EfficiencyHVAC = efficiency
+                BaseHvacEfficiency = float(eff/100.)
             except:
                 print("bad value")
 
-        EfficiencyHVAC = EFFICIENCY_HVAC_OIL
-        s = "%f" % (EfficiencyHVAC)
-        
-        eff = StringVar()
-        eff.set(s)
+            e.config(text=eff)
+            e.update()
 
-        label2=ttk.Label(self,text="\tSet System Efficiency",font=SMALL_FONT)
-        label2.grid(row=3,column=0,columnspan=3,pady=30,padx=10)
-        e = Entry(self, width=5, textvariable=eff)
-        e.bind("<Return>", evaluate)
-        e.grid(row=3, column=3)
+        eff = '{0:2.1f}'.format(100.*BaseHvacEfficiency)
+        e = ttk.Label(self, width=5, text=eff)
+        e.grid(row=2, column=3)
 
-              
+        btn1 =ttk.Button(self,text="System Efficiency", command=lambda: getEfficiency(e))
+        btn1.grid(row=2,column=2,padx=10)
+
         def setStartDate() :
             cd = CalendarDialog(self,year=2012,month=7)
             turn_ON_Date = datetime.date(cd.result.year, cd.result.month, cd.result.day)         
@@ -1096,19 +1190,63 @@ class BaselineHeatingPage(tk.Frame):
             print (turn_OFF_Date)
 
         label3=ttk.Label(self,text="Set Annual System Start/End Dates",font=SMALL_FONT)
-        label3.grid(row=4,column=0,columnspan=3,pady=30,padx=10)
+        label3.grid(row=3,column=2,columnspan=2,padx=10)
             
         button2 = ttk.Button(self,text="Start Date",
                     command = setStartDate)
-        button2.grid(row=4,column=3)
+        button2.grid(row=4,column=2)
 
+        labelSD = ttk.Label(self,text=turn_ON_Date)
+        labelSD.grid(row=4,column=3)
+        
         button3 = ttk.Button(self,text="End Date",
                     command = setEndDate)
-        button3.grid(row=4,column=4)
+        button3.grid(row=5,column=2)
+
+        labelED = ttk.Label(self,text=turn_OFF_Date)
+        labelED.grid(row=5,column=3)
+
+        labelW=ttk.Label(self,text="Baseline hot water type parameters",font=NORM_FONT)
+        labelW.grid(row=10,column=2,columnspan=3,pady=30,padx=10)
+
+        BLWType = IntVar()
+        BLWType.set(0)
+        rbw1 = tk.Radiobutton(self, width=16, text=HEAT_NAME_OIL, variable=BLWType, value=0, command=lambda: SetBLWScenario(HEAT_TYPE_OIL))
+        rbw2 = tk.Radiobutton(self, width=16, text=HEAT_NAME_GAS, variable=BLWType, value=1, command=lambda: SetBLWScenario(HEAT_TYPE_GAS))
+        rbw3 = tk.Radiobutton(self, width=16, text=HEAT_NAME_ELEC,variable=BLWType, value=2, command=lambda: SetBLWScenario(HEAT_TYPE_ELEC))
+        rbw4 = tk.Radiobutton(self, width=16, text=HEAT_NAME_LPG, variable=BLWType, value=3, command=lambda: SetBLWScenario(HEAT_TYPE_LPG))
+        rbw5 = tk.Radiobutton(self, width=16, text="Other",       variable=BLWType, value=4, command=lambda: SetBLWScenario(HEAT_TYPE_OTHER))
+        rbw1.grid(row=12,column=0,padx=20)
+        rbw2.grid(row=13,column=0,padx=20)
+        rbw3.grid(row=14,column=0,padx=20)
+        rbw4.grid(row=15,column=0,padx=20)
+        rbw5.grid(row=16,column=0,padx=20)
+        rbw1.invoke()
+         
+        def getWaterUse(e):
+            s = GetFloat("Estimate monthly heat units for water", default=0.0, min=0.)
+            weff = s.result
+            try:
+                WaterHeatMonthlyUsage = float(weff)
+            except:
+                print("bad value")
+
+            e.config(text=weff)
+            e.update()
+
+
+        weff = '{0:.0f}'.format(WaterHeatMonthlyUsage)
+        ew = ttk.Label(self, width=5, text=weff)
+        ew.grid(row=12, column=4)
+        btn1 =ttk.Button(self,text="Monthly heat units (est)", command=lambda: getWaterUse(ew))
+        btn1.grid(row=12,column=3)
+
+        labelAC=ttk.Label(self,text="Baseline air conditioning parameters",font=NORM_FONT)
+        labelAC.grid(row=20,column=2,columnspan=3,pady=30,padx=10)
 
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
-        button4.grid(row=10, column=2)
+        button4.grid(row=30, column=3,pady=30)
 
 def selHeatPump(H,info):
     global firstPlot
@@ -1242,7 +1380,6 @@ class SelectHeatPumpPage(tk.Frame):
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
         button4.grid(row=6,column=1)        
-       
 
 class GraphPage(tk.Frame):
     def __init__(self,parent,controller):
@@ -1344,13 +1481,24 @@ def approxResistance():
 
     # Calculate the total oil used
     total_Vol = 0.0
+    prevDate = purchase_Date[0]
     for p in range(0, last_Purchase):
+        if BaseHeatType == WaterHeatType and WaterHeatMonthlyUsage>0 :
+            purchasePeriod = (purchase_Date[p] - prevDate)
+            days = purchasePeriod.days
+            months = days * (12./365)
+            WaterFuelInPeriod = WaterHeatMonthlyUsage * months
+        else:
+            WaterFuelInPeriod = 0.
+        
+        prevDate = purchase_Date[p]
         year = purchase_Date[p].year
         Y = year - startYear
         if year <= endYear:
-            total_Vol = purchase_Quantity[p] + total_Vol
-            BaseUnitsByYear[Y] += purchase_Quantity[p]
-            BaseCostByYear[Y] += purchase_Cost[p]
+            Quantity_Used = (purchase_Quantity[p]-WaterFuelInPeriod)
+            total_Vol += Quantity_Used
+            BaseUnitsByYear[Y] += Quantity_Used
+            BaseCostByYear[Y] += purchase_Cost[p]*(Quantity_Used/purchase_Quantity[p])
 
     # Calculate the average resistance per heating period
     p = 0
@@ -1358,6 +1506,15 @@ def approxResistance():
     approx_Resistance[0][1] = 0.0
     for t in range(t_Start,t_End):
         
+        if BaseHeatType == WaterHeatType and WaterHeatMonthlyUsage>0 and p<len(purchase_Date)-2 :
+            purchasePeriod = (purchase_Date[p+1] - purchase_Date[p])
+            days = purchasePeriod.days
+            months = days * (12./365)
+            WaterFuelInPeriod = WaterHeatMonthlyUsage * months
+        else:
+            WaterFuelInPeriod = 0.
+        Quantity_Used = (purchase_Quantity[p]-WaterFuelInPeriod)
+
         ti = t-t_Start
         dateTime = t_Data[t]
         year = dateTime.year
@@ -1368,14 +1525,14 @@ def approxResistance():
 
             # Sum app eligible delta_T during each heating period
     
-            approx_Resistance[p][1] += (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * purchase_Quantity[p + 1] * BaseEnergyContent)
+            approx_Resistance[p][1] += (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * Quantity_Used * BaseEnergyContent)
     
         else:
             if isHeating(t) and (purchase_Date[p + 1] <= thisDate) and (thisDate <= purchase_Date[last_Purchase]) and (p < last_Purchase): 
                 # this particular time sample belongs to the next purchase period
                 p = p + 1
                 approx_Resistance[p][0] = t
-                approx_Resistance[p][1] =  (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * purchase_Quantity[p + 1] * BaseEnergyContent)
+                approx_Resistance[p][1] =  (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * Quantity_Used * BaseEnergyContent)
     
  
     # Average resistance during the heating period
