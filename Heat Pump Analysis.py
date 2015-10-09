@@ -146,7 +146,13 @@ WaterHeatMonthlyUsage = 24              # in WaterEnergyUnits - which if same as
 ElecKgCO2PerUnit = KGCO2_PER_UNIT_ELEC
 
 T_Outdoor = [] # (1 To SITE_DATA_MAX) As Single ' outdoor temperature
-T_Indoor = 65  #  As Single 'indoor temperaure as provided by the user
+# T_Indoor = 65  #  As Single 'indoor temperaure as provided by the user
+WinterHPSetPoint = 65
+SummerHPSetPoint = 78
+WinterBLSetPoint = WinterHPSetPoint
+SummerBLSetPoint = SummerHPSetPoint
+BaselineAC = 0      # none
+BaselineSEER = 0
 
 # times at which the temperature data was taken, this includes date and time
 t_Data = []    # (1 To SITE_DATA_MAX) As Date 
@@ -174,20 +180,28 @@ average_Resistance = -1.0
 # arrays indexed by time (calculated from temperature vs time data)
 timeArray = []
 Q_required = []         # Double # based on resistance and outdoor temperatures only
+QC_required = []         # Double # based on resistance and outdoor temperatures only
 electric_Required = []  # Min consumption, Approximate requirement, Max consumption (for each heat pump)
 
 capacity_Max = []       # maximum capacity of each heat pump in the heating period
 capacity_Min = []       # minimum capacity of each heat pump in the heating period
 supplemental_Heat = []  # additional heat required to meet heating requirements per hour
 COP_Ave = []            #  
+baselineAC_pwr = []
+heatpumpAC_pwr = []
 
 KWhByYear = []
 SuppUnitsByYear = []
 SuppUsesByYear = []
 BaseUnitsByYear = []
 BaseCostByYear = []
-
+BLAC_KWhByYear = []
+HPAC_KWhByYear = []
+  
 updateGraph = False
+updateTemp = True
+updateResistance = True
+
 #f = Figure(figsize=(10,6), dpi=100)
 #a = f.add_subplot(111)
 f = plt.figure()
@@ -234,6 +248,8 @@ def popupmsg(title, msg):
 def SetBLScenario(BLT) :
     global BaseHeatType,BaseHvacEfficiency,BaseEnergyContent,BaseEnergyUnits,BaseKgCO2PerUnit,BaseCostPerUnit
     global SuppHeatType,SuppHvacEfficiency,SuppEnergyContent,SuppEnergyUnits,SuppKgCO2PerUnit,SuppCostPerUnit
+    global UpdateResistance
+    
     if BLT == HEAT_TYPE_OIL :    # oil
         BaseHeatType = HEAT_NAME_OIL
         BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
@@ -299,9 +315,12 @@ def SetBLScenario(BLT) :
     SuppEnergyUnits = BaseEnergyUnits
     SuppKgCO2PerUnit = BaseKgCO2PerUnit
     SuppCostPerUnit = BaseCostPerUnit
+    
+    updateResistance = True
 
 def SetBLWScenario(BLT) :
     global WaterHeatType
+    global UpdateResistance
     
     if BLT == HEAT_TYPE_OIL :    # oil
         WaterHeatType = HEAT_NAME_OIL
@@ -328,6 +347,19 @@ def SetBLWScenario(BLT) :
     SuppEnergyUnits = BaseEnergyUnits
     SuppKgCO2PerUnit = BaseKgCO2PerUnit
     SuppCostPerUnit = BaseCostPerUnit
+    
+    UpdateResistance = True
+
+def SetBLAScenario(BLA) :
+    global BaselineAC
+    global UpdateResistance
+    
+    if BLA == 0 :    # none
+        BaselineAC = 0
+    if BLA == 1 :    # window units, how many
+        BaselineAC = 1
+    if BLA == 2 :    # central
+        BaselineAC = 2
 
 def loadFuelDeliveries(purchasesFile):
 
@@ -335,6 +367,7 @@ def loadFuelDeliveries(purchasesFile):
     # input = open('./Residential Profiles/FP Oil Deliveries.txt')
     global numDeliveries
     global fuelDeliveryHeader
+    global UpdateTemp, UpdateResistance
         
     numDeliveries = 0
     fuelDeliveryHeader = ""
@@ -447,6 +480,9 @@ def loadFuelDeliveries(purchasesFile):
         purchase_Date.append(DeliveryDate)
 
         numDeliveries += 1
+
+    UpdateTemp = True
+    UpdateResistance = True
     
     return numDeliveries
 def saveFuelDeliveries(purchasesFile):
@@ -494,6 +530,7 @@ def saveFuelDeliveries(purchasesFile):
     return numDeliveries
 
 def initializeData():
+    global UpdateTemp, UpdateResistance
     # adapted from VBA initialize, author Jonah Kadoko
     # Initialize important counters
 
@@ -502,6 +539,9 @@ def initializeData():
     filename = 'Default Oil Deliveries.txt'
     purchasesFile = workingDirectory + filename
     numDeliveries = loadFuelDeliveries(purchasesFile)
+    
+    UpdateTemp = True
+    UpdateResistance = True
     
 def loadHeatPumps():
 
@@ -590,13 +630,17 @@ def loadHeatPumps():
         except Exception as e:
             print(e)
                 
-def LoadTempDataRaw():
+def LoadTempDataRaw(status, year=0):
     
     T_Outdoor.clear()
     t_Data.clear()
-    
-    yearStart = purchase_Date[0].year
-    yearEnd = purchase_Date[-1].year
+
+    if year==0:
+        yearStart = purchase_Date[0].year
+        yearEnd = purchase_Date[-1].year
+    else:
+        yearStart = yearEnd = year
+        
     prevTemp = -999
     oneHour = datetime.timedelta(0,0,0,0,0,1,0)
     
@@ -605,6 +649,10 @@ def LoadTempDataRaw():
     for year in range(yearStart,yearEnd+1):
         filename = "%s-%i.txt" % (ClimaticDataPath, year) 
         print("Reading "+filename)
+        
+        status.config(text="Loading temperature data from: "+filename)
+        status.update()
+
         LN = -1
         nextHour = datetime.datetime(year,1,1,0,0)
         for line in open(filename,'r',encoding='latin-1'):
@@ -709,6 +757,7 @@ def animate(i):
         a.plot_date(timeArray,Q_required, "g", label = "Total required heat")
         a.plot_date(timeArray,supplemental_Heat, "r", label = "Supplemental needed")
         a.plot_date(timeArray,capacity_Max, "b", label = "Maximum Capacity")
+        a.plot_date(timeArray,QC_required, "y", label = "Cooling required")
     
         a.legend(bbox_to_anchor=(0,0.92,1,.102),loc=3, ncol=3, borderaxespad=0)
         
@@ -758,132 +807,173 @@ class HeatPumpPerformanceApp(tk.Tk):
         frame = self.frames[cont]
         frame.tkraise()
 
-class StartPage(tk.Frame) :
-        
-    def __init__(self,parent,controller):
-        tk.Frame.__init__(self,parent)
-        
-        label=ttk.Label(self,text="PRELIMINARY: This heat pump analysis tool is a prototype which has been adaptated\n"+
-        "from the Tufts ME145 Spring 2015 project by J.Kadako et al.\n"+
-        "It has limited applicability and needs to be extended to be useful\n"+
-        "Use at your own risk",font=NORM_FONT)        
-        label.pack(pady=10,padx=10)
-
-        label2=ttk.Label(self,text="Copyright 2015, Town of Concord Comprehensive Sustainable Energy Committee",font=SMALL_FONT)        
-        label2.pack(pady=10,padx=10)
-
-        label3=ttk.Label(self,text="This software tool can be freely distributed, and is covered by the GNU Public License",font=SMALL_FONT)        
-        label3.pack(pady=10,padx=10)
- 
-        button1 = ttk.Button(self,text="Continue",
-                    command = lambda: controller.show_frame(HomePage))
-        button1.pack()
-
-        def showLicense():
-            input = open("LICENSE")
-            text = input.read()            
-            popupmsg("License Information",text)
-
-        button0 = ttk.Button(self,text="License Information",
-                    command = lambda: showLicense())
-        button0.pack()
-
-        button2 = ttk.Button(self,text="Quit",
-                    command = quit)
-        button2.pack()
-       
-        
-class HomePage(tk.Frame) :
-    def __init__(self,parent,controller):
-        tk.Frame.__init__(self,parent)
-        
-        label=ttk.Label(self,text="Home Page",font=LARGE_FONT)        
-        label.pack(pady=10,padx=10)
-        
-        statusBar = tk.Label(self,text="Status: idle",font=SMALL_FONT,bd=1,relief=SUNKEN,anchor=W)        
-        statusBar.pack(side=BOTTOM, fill=X)
-        
-        text1=tk.Text(self,font=NORM_FONT, height=30, width=90)
-        text1.insert(END,"\nResults:\n")
-        button1 = ttk.Button(self,width=26,text="Baseline Heating Scenario",
-                    command = lambda: controller.show_frame(BaselineHeatingPage))
-        button1.pack()
-
-        button2 = ttk.Button(self,width=26,text="Fuel Purchase History",
-                    command = lambda: controller.show_frame(FuelDeliveryPage))
-        button2.pack()
-
-        button3 = ttk.Button(self,width=26,text="Select Heat Pump Options",
-                    command = lambda: controller.show_frame(SelectHeatPumpPage))
-        button3.pack()
-
-        button4 = ttk.Button(self,width=26,text="Do Analysis",
-                    command = lambda: doHeatPumpAnalysis(statusBar, text1))
-        button4.pack()
-
-        button5 = ttk.Button(self,width=26,text="Show Graph",
-                    command = lambda: controller.show_frame(GraphPage))
-        button5.pack()
-        
-        buttonQ = ttk.Button(self,width=26,text = "Quit", command = quit)
-        buttonQ.pack()
-
-        text1.pack()
-
 def doHeatPumpAnalysis(status,text): 
-    global updateGraph
+    global updateGraph, updateTemp, updateResistance
+
+    # certain years of note since 1993zzzzz
+    AverageHDDYear = 2008
+    AverageCDDYear = 2003
+    HighestHDDYear = 2003
+    HighestCDDYear = 2010
     
     hpNames = ""
+    n = 0
     for hp in HPChoice :
-        hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit + "+"
+        hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit
+        n += 1
+        if n<len(HPChoice):
+            hpNames += "+"
 
 #    H = 13   #   the heat pump chosen
-    status.config(text="Loading temperature data for period")
-    status.update()
-    LoadTempDataRaw()
-#   LoadTempData()      # old version, reading from a spreadsheet file
+    if updateTemp :
+        status.config(text="Loading temperature data for period")
+        status.update()
+        LoadTempDataRaw(status)
+        updateTemp = False
 
-    status.config(text="Calculating home thermal resistance")
-    status.update()
-    approxResistance()
+    if updateResistance :
+        status.config(text="Calculating home thermal resistance")
+        status.update()
+        approxResistance()
+        updateResistance = False
 
     status.config(text="Analyzing heat pump performance")
     status.update()
     p = heatPumpPerformance(0)
-
+    
     status.config(text="Saving results")
     status.update()
     outputData(0)
     
     totSavings = totBaseEmissions = totHPEmissions = totSuppEmissions = 0.
+    totHPACEmissions = totBLACEmissions = 0.0
+
+    BLAC = BaselineAC != 0 and SummerBLSetPoint> 0
+    HPAC = SummerHPSetPoint>0
 
     results = "\nAnalysis of heat pump performance for " + hpNames +"\n\n"
-    results += "\tBaseline ("+BaseHeatType+")\t\t\tHeat Pump\t\t\tSupplemental ("+SuppHeatType+")\n"
-    results += "Year\t"+BaseEnergyUnits+"\tCost\t\tKWh\tCost\t\t#days\t"+SuppEnergyUnits+"\tCost\n"
+    results += "\tBaseline ("+BaseHeatType+")\t\t"
+    if BLAC:
+        results += "A/C\t\t\t"
+    results += "\tHeat Pump\t\t\t\tSupplemental ("+SuppHeatType+")"
+    if HPAC:
+        results += "\t\t\tA/C"
+    results +="\n"
+    
+    results += "Year\t"+BaseEnergyUnits+"\tCost\t"
+    if BLAC:
+        results += "kWh\tCost\t"
+    results += "\tKWh\tCost\tCOP\t\t#days\t"+SuppEnergyUnits+"\tCost\t"
+    if HPAC:
+        results += "kWh\tCost\t"
+    results += "\n"
+
     startYear = t_Data[t_Start].year
     endYear = t_Data[t_End].year
-    for year in range(startYear,endYear+1):
+    for year in range(startYear+1,endYear):     # first and last years tend to be truncated, with potentially misleading results
         Y = year-startYear
-        resultline = "%d\t%.1f\t$%.0f\t\t%.1f\t$%.0f\t\t%d\t%.1f\t$%.0f\n" % (year,BaseUnitsByYear[Y],BaseCostByYear[Y],KWhByYear[Y],KWhByYear[Y]*.15,SuppUsesByYear[Y],SuppUnitsByYear[Y],SuppUnitsByYear[Y]*SuppCostPerUnit)
+
+        COPAve = BaseUnitsByYear[Y]*BaseHvacEfficiency*(BaseEnergyContent/ENERGY_CONTENT_ELEC)/KWhByYear[Y]
+        resultline = "%d\t%.1f\t$%.0f" % (year,BaseUnitsByYear[Y],BaseCostByYear[Y])
+
+        if BLAC:
+            resultline += "\t%.1f\t$%.0f" % (BLAC_KWhByYear[Y],BLAC_KWhByYear[Y]*STANDARD_PRICE_ELEC)
+        
+        resultline += "\t\t%.1f\t$%.0f\t%.1f\t\t%d\t%.1f\t$%.0f" % (KWhByYear[Y],KWhByYear[Y]*STANDARD_PRICE_ELEC,COPAve,SuppUsesByYear[Y],SuppUnitsByYear[Y],SuppUnitsByYear[Y]*SuppCostPerUnit)
+        
+        if HPAC:
+            resultline += "\t%.1f\t$%.0f" % (HPAC_KWhByYear[Y],HPAC_KWhByYear[Y]*STANDARD_PRICE_ELEC)
+            
+        resultline += "\n"
+            
         results += resultline
-        totSavings += BaseCostByYear[Y] - (KWhByYear[Y]*0.15 + SuppUnitsByYear[Y]*SuppCostPerUnit)
+        totSavings += BaseCostByYear[Y] - (KWhByYear[Y]*STANDARD_PRICE_ELEC + SuppUnitsByYear[Y]*SuppCostPerUnit) 
+        if BLAC or HPAC :
+            totSavings += (BLAC_KWhByYear[Y]-HPAC_KWhByYear[Y]) * STANDARD_PRICE_ELEC
+            
         totBaseEmissions += BaseKgCO2PerUnit*BaseUnitsByYear[Y]
         totHPEmissions += ElecKgCO2PerUnit*KWhByYear[Y]
         totSuppEmissions += SuppKgCO2PerUnit*SuppUnitsByYear[Y]
-
+        totBLACEmissions += BLAC_KWhByYear[Y]*ElecKgCO2PerUnit
+        totHPACEmissions += HPAC_KWhByYear[Y]*ElecKgCO2PerUnit
     
     if totSavings>0 :
         savingsImpact = "saved"
     else:
         savingsImpact = "cost an additional"
         
-    CO2_percent_impact = (100.*(totBaseEmissions - totHPEmissions - totSuppEmissions))/totBaseEmissions
+    CO2_percent_impact = (100.*(totBaseEmissions + totBLACEmissions - totHPEmissions - totSuppEmissions- totHPACEmissions))
+    CO2_percent_impact /= (totBaseEmissions+totBLACEmissions)
     if CO2_percent_impact>0 : 
         CO2Impact = "less"
     else:
         CO2Impact = "more"
         
-    results += "\nOver the years %d-%d, the heat pump would have %s $%.0f, emitting %.0f%% %s CO2eq than %s\n" % (startYear,endYear,savingsImpact, abs(totSavings), CO2_percent_impact, CO2Impact,BaseHeatType)
+    results += "\nOver the years %d-%d, the heat pump would have %s $%.0f, emitting %.0f%% %s CO2eq than %s\n" % (startYear+1,endYear-1,savingsImpact, abs(totSavings), CO2_percent_impact, CO2Impact,BaseHeatType)
+
+    analyzeExtremes = True
+    if analyzeExtremes:
+        # average year first
+        LoadTempDataRaw(status,AverageHDDYear)
+        heatPumpPerformance(AverageHDDYear)
+
+        totBaseEmissions += BaseKgCO2PerUnit*BaseUnitsByYear[0]
+        totHPEmissions   += ElecKgCO2PerUnit*KWhByYear[0]
+        totSuppEmissions += SuppKgCO2PerUnit*SuppUnitsByYear[0]
+        totBLACEmissions += BLAC_KWhByYear[0]*ElecKgCO2PerUnit
+        totHPACEmissions += HPAC_KWhByYear[0]*ElecKgCO2PerUnit
+        totSavings = BaseCostByYear[0] - (KWhByYear[0]*STANDARD_PRICE_ELEC + SuppUnitsByYear[0]*SuppCostPerUnit) 
+        if BLAC or HPAC :
+            totSavings += (BLAC_KWhByYear[0]-HPAC_KWhByYear[0]) * STANDARD_PRICE_ELEC
+        if totSavings>0 :
+            savingsImpact = "saved"
+        else:
+            savingsImpact = "cost an additional"
+
+        CO2_percent_impact = (100.*(totBaseEmissions + totBLACEmissions - totHPEmissions - totSuppEmissions- totHPACEmissions))
+        CO2_percent_impact /= (totBaseEmissions+totBLACEmissions)
+        if CO2_percent_impact>0 : 
+            CO2Impact = "less"
+        else:
+            CO2Impact = "more"
+
+        percentOfLoad = 100.* (totalRequiredHeating  - SuppUnitsByYear[0]*SuppEnergyContent)/totalRequiredHeating
+            
+        results += "Average heating year (%d), heat pump covers " % (AverageHDDYear)
+        results += "%.1f%% of heating load, %s $%.0f, " % (percentOfLoad,savingsImpact,abs(totSavings))
+        results += "emits %.0f%% %s CO2 than %s\n" % (CO2_percent_impact,CO2Impact,BaseHeatType)
+        
+        LoadTempDataRaw(status,HighestHDDYear)
+        heatPumpPerformance(HighestHDDYear)
+
+        totBaseEmissions += BaseKgCO2PerUnit*BaseUnitsByYear[0]
+        totHPEmissions += ElecKgCO2PerUnit*KWhByYear[0]
+        totSuppEmissions += SuppKgCO2PerUnit*SuppUnitsByYear[0]
+        totBLACEmissions += BLAC_KWhByYear[0]*ElecKgCO2PerUnit
+        totHPACEmissions += HPAC_KWhByYear[0]*ElecKgCO2PerUnit
+        totSavings = BaseCostByYear[0] - (KWhByYear[0]*STANDARD_PRICE_ELEC + SuppUnitsByYear[0]*SuppCostPerUnit) 
+        if BLAC or HPAC :
+            totSavings += (BLAC_KWhByYear[0]-HPAC_KWhByYear[0]) * STANDARD_PRICE_ELEC
+        if totSavings>0 :
+            savingsImpact = "saved"
+        else:
+            savingsImpact = "cost an additional"
+
+        CO2_percent_impact = (100.*(totBaseEmissions + totBLACEmissions - totHPEmissions - totSuppEmissions- totHPACEmissions))
+        CO2_percent_impact /= (totBaseEmissions+totBLACEmissions)
+        if CO2_percent_impact>0 : 
+            CO2Impact = "less"
+        else:
+            CO2Impact = "more"
+
+        percentOfLoad = 100.* (totalRequiredHeating  - SuppUnitsByYear[0]*SuppEnergyContent)/totalRequiredHeating
+            
+        results += "Coldest heating year (%d), heat pump covers " % (HighestHDDYear) 
+        results += "%.1f%% of heating load, %s $%.0f, " % (percentOfLoad,savingsImpact,abs(totSavings))
+        results += "emits %.0f%% %s CO2 than %s\n" % (CO2_percent_impact,CO2Impact,BaseHeatType)
+       
+        updateTemp = True
+
     text.insert(END,results)
     
     updateGraph = True
@@ -979,9 +1069,6 @@ def UpdateDeliveryGraph(self):
         ma1.append(WaterHeatMonthlyUsage)    
         ma1.append(WaterHeatMonthlyUsage)
     
-#        a = plt.subplot2grid((6,4), (0,0), rowspan = 5, colspan = 4)
-#        a2 = plt.subplot2grid((6,4), (5,0), rowspan = 1, colspan = 4, sharex = a)
-
         a3.clear()
         a3.plot_date(tArray,fuel_required, "g", label = "Total monthly fuel consumption")   
         a3.plot_date(ta1, ma1, "r", label = "Fuel for water and cooking")    
@@ -993,11 +1080,89 @@ def UpdateDeliveryGraph(self):
         f3.canvas.draw()
 
     updateGraph=False
-    
+
+class StartPage(tk.Frame) :
+        
+    def __init__(self,parent,controller):
+        tk.Frame.__init__(self,parent)
+        
+        label=ttk.Label(self,text="PRELIMINARY: This heat pump analysis tool is a prototype which has been adaptated\n"+
+        "from the Tufts ME145 Spring 2015 project by J.Kadako et al.\n"+
+        "It has limited applicability and needs to be extended to be useful\n"+
+        "Use at your own risk",font=NORM_FONT)        
+        label.pack(pady=10,padx=10)
+
+        label2=ttk.Label(self,text="Copyright 2015, Town of Concord Comprehensive Sustainable Energy Committee",font=SMALL_FONT)        
+        label2.pack(pady=10,padx=10)
+
+        label3=ttk.Label(self,text="This software tool can be freely distributed, and is covered by the GNU Public License",font=SMALL_FONT)        
+        label3.pack(pady=10,padx=10)
+ 
+        ys = 5
+        button1 = ttk.Button(self,text="Continue",width=26,
+                    command = lambda: controller.show_frame(HomePage))
+        button1.pack(pady=ys)
+
+        def showLicense():
+            input = open("LICENSE")
+            text = input.read()            
+            popupmsg("License Information",text)
+
+        button0 = ttk.Button(self,text="License Information",width=26,
+                    command = lambda: showLicense())
+        button0.pack(pady=ys)
+
+        button2 = ttk.Button(self,text="Quit",width=26,
+                    command = quit)
+        button2.pack(pady=ys)
+       
+        
+class HomePage(tk.Frame) :
+    def __init__(self,parent,controller):
+        tk.Frame.__init__(self,parent)
+        
+        label=ttk.Label(self,text="Home Page",font=LARGE_FONT)        
+        label.pack(pady=10,padx=10)
+        
+        statusBar = tk.Label(self,text="Status: idle",font=SMALL_FONT,bd=1,relief=SUNKEN,anchor=W)        
+        statusBar.pack(side=BOTTOM, fill=X)
+
+        ys = 5
+        text1=tk.Text(self,font=NORM_FONT, height=30, width=120)
+        text1.insert(END,"\nResults:\n")
+        button1 = ttk.Button(self,width=26,text="Baseline Heating Scenario",
+                    command = lambda: controller.show_frame(BaselineHeatingPage))
+        button1.pack(pady=ys)
+
+        button2 = ttk.Button(self,width=26,text="Fuel Purchase History",
+                    command = lambda: controller.show_frame(FuelDeliveryPage))
+        button2.pack(pady=ys)
+
+        button3 = ttk.Button(self,width=26,text="Select Heat Pump Options",
+                    command = lambda: controller.show_frame(SelectHeatPumpPage))
+        button3.pack(pady=ys)
+
+        button4 = ttk.Button(self,width=26,text="Do Analysis",
+                    command = lambda: doHeatPumpAnalysis(statusBar, text1))
+        button4.pack(pady=ys)
+
+        button5 = ttk.Button(self,width=26,text="Show Graph",
+                    command = lambda: controller.show_frame(GraphPage))
+        button5.pack(pady=ys)
+        
+        buttonQ = ttk.Button(self,width=26,text = "Quit", command = quit)
+        buttonQ.pack(pady=ys)
+
+        text1.pack()
+
         
 class FuelDeliveryPage(tk.Frame):
     global fuelDeliveryHeader
-    
+
+    def tkraise(self):
+        UpdateDeliveryGraph(self)
+        tk.Frame.tkraise(self)
+        
     def AddDelivery(self,listbox):
         global numDeliveries
         # dialog to inquire date cost and volume
@@ -1138,6 +1303,8 @@ class FuelDeliveryPage(tk.Frame):
 
 class BaselineHeatingPage(tk.Frame):
     global EfficiencyHVAC, WaterHeatMonthlyUsage
+    global WinterBLSetPoint, SummerBLSetPoint
+    
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
         label=ttk.Label(self,text="Baseline Heating Scenario: the exisiting system with it's fuel consumption specified",font=LARGE_FONT)
@@ -1155,11 +1322,12 @@ class BaselineHeatingPage(tk.Frame):
         rb4 = tk.Radiobutton(self, width=16, text=HEAT_NAME_LPG, variable=BLType, value=3, command=lambda: SetBLScenario(HEAT_TYPE_LPG))
         rb5 = tk.Radiobutton(self, width=16, text="Other",       variable=BLType, value=4, command=lambda: SetBLScenario(HEAT_TYPE_OTHER))
 
-        rb1.grid(row=2,column=0,padx=20)
-        rb2.grid(row=3,column=0,padx=20)
-        rb3.grid(row=4,column=0,padx=20)
-        rb4.grid(row=5,column=0,padx=20)
-        rb5.grid(row=6,column=0,padx=20)
+        ys = 5
+        rb1.grid(row=2,column=0,padx=20, pady = ys)
+        rb2.grid(row=3,column=0,padx=20, pady = ys)
+        rb3.grid(row=4,column=0,padx=20, pady = ys)
+        rb4.grid(row=5,column=0,padx=20, pady = ys)
+        rb5.grid(row=6,column=0,padx=20, pady = ys)
         rb1.invoke()
         
         def getEfficiency(self):
@@ -1175,10 +1343,10 @@ class BaselineHeatingPage(tk.Frame):
 
         eff = '{0:2.1f}'.format(100.*BaseHvacEfficiency)
         e = ttk.Label(self, width=5, text=eff)
-        e.grid(row=2, column=3)
+        e.grid(row=2, column=3, pady = ys)
 
-        btn1 =ttk.Button(self,text="System Efficiency", command=lambda: getEfficiency(e))
-        btn1.grid(row=2,column=2,padx=10)
+        btn1 =ttk.Button(self,text="System Efficiency",width=20,  command=lambda: getEfficiency(e))
+        btn1.grid(row=2,column=2,padx=10, pady = ys)
 
         def setStartDate() :
             cd = CalendarDialog(self,year=2012,month=7)
@@ -1188,24 +1356,57 @@ class BaselineHeatingPage(tk.Frame):
             cd = CalendarDialog(self)
             turn_OFF_Date = datetime.date(cd.result.year, cd.result.month, cd.result.day)           
             print (turn_OFF_Date)
+        def setTempSetPoint(e): 
+            global WinterBLSetPoint
+            s = GetFloat("Temperature set point", default=WinterBLSetPoint, min=50., max=90.)
+            weff = s.result
+            try:
+                WinterBLSetPoint = float(weff)
+            except:
+                print("bad value")
+
+            e.config(text=weff)
+            e.update()
+        def setACSetPoint(e): 
+            global SummerBLSetPoint
+            s = GetFloat("Temperature set point", default=SummerBLSetPoint, min=50., max=90.)
+            weff = s.result
+            try:
+                SummerBLSetPoint = float(weff)
+            except:
+                print("bad value")
+
+            e.config(text=weff)
+            e.update()
+            
 
         label3=ttk.Label(self,text="Set Annual System Start/End Dates",font=SMALL_FONT)
-        label3.grid(row=3,column=2,columnspan=2,padx=10)
+        label3.grid(row=3,column=2,columnspan=2,padx=10, pady = ys)
             
-        button2 = ttk.Button(self,text="Start Date",
+        button2 = ttk.Button(self,text="Start Date",width=20, 
                     command = setStartDate)
-        button2.grid(row=4,column=2)
+        button2.grid(row=4,column=2, pady = ys)
 
         labelSD = ttk.Label(self,text=turn_ON_Date)
-        labelSD.grid(row=4,column=3)
+        labelSD.grid(row=4,column=3, pady = ys)
         
-        button3 = ttk.Button(self,text="End Date",
+        button3 = ttk.Button(self,text="End Date",width=20, 
                     command = setEndDate)
-        button3.grid(row=5,column=2)
+        button3.grid(row=5,column=2, pady = ys)
 
         labelED = ttk.Label(self,text=turn_OFF_Date)
-        labelED.grid(row=5,column=3)
+        labelED.grid(row=5,column=3, pady = ys)
 
+        label3=ttk.Label(self,text="Thermostat set point",font=SMALL_FONT)
+        label3.grid(row=3,column=4,columnspan=2,padx=10, pady = ys)
+            
+        labelT = ttk.Label(self,text=str(WinterBLSetPoint))
+        button2a = ttk.Button(self,text="Temperature",width=20, 
+                    command = lambda: setTempSetPoint(labelT))
+        button2a.grid(row=4,column=4, pady = ys)
+        labelT.grid(row=4,column=5, pady = ys)
+
+        
         labelW=ttk.Label(self,text="Baseline hot water type parameters",font=NORM_FONT)
         labelW.grid(row=10,column=2,columnspan=3,pady=30,padx=10)
 
@@ -1216,15 +1417,16 @@ class BaselineHeatingPage(tk.Frame):
         rbw3 = tk.Radiobutton(self, width=16, text=HEAT_NAME_ELEC,variable=BLWType, value=2, command=lambda: SetBLWScenario(HEAT_TYPE_ELEC))
         rbw4 = tk.Radiobutton(self, width=16, text=HEAT_NAME_LPG, variable=BLWType, value=3, command=lambda: SetBLWScenario(HEAT_TYPE_LPG))
         rbw5 = tk.Radiobutton(self, width=16, text="Other",       variable=BLWType, value=4, command=lambda: SetBLWScenario(HEAT_TYPE_OTHER))
-        rbw1.grid(row=12,column=0,padx=20)
-        rbw2.grid(row=13,column=0,padx=20)
-        rbw3.grid(row=14,column=0,padx=20)
-        rbw4.grid(row=15,column=0,padx=20)
-        rbw5.grid(row=16,column=0,padx=20)
+        rbw1.grid(row=12,column=0,padx=20, pady = ys)
+        rbw2.grid(row=13,column=0,padx=20, pady = ys)
+        rbw3.grid(row=14,column=0,padx=20, pady = ys)
+        rbw4.grid(row=15,column=0,padx=20, pady = ys)
+        rbw5.grid(row=16,column=0,padx=20, pady = ys)
         rbw1.invoke()
          
         def getWaterUse(e):
-            s = GetFloat("Estimate monthly heat units for water", default=0.0, min=0.)
+            global WaterHeatMonthlyUsage
+            s = GetFloat("Estimate monthly heat units for water", default=WaterHeatMonthlyUsage, min=0.)
             weff = s.result
             try:
                 WaterHeatMonthlyUsage = float(weff)
@@ -1234,19 +1436,61 @@ class BaselineHeatingPage(tk.Frame):
             e.config(text=weff)
             e.update()
 
+        btnTxt = "Estimated monthly "+BaseEnergyUnits
 
         weff = '{0:.0f}'.format(WaterHeatMonthlyUsage)
         ew = ttk.Label(self, width=5, text=weff)
-        ew.grid(row=12, column=4)
-        btn1 =ttk.Button(self,text="Monthly heat units (est)", command=lambda: getWaterUse(ew))
-        btn1.grid(row=12,column=3)
+        ew.grid(row=12, column=3)
+        btn1 =ttk.Button(self,text=btnTxt, width=20, command=lambda: getWaterUse(ew))
+        btn1.grid(row=12,column=2)
 
         labelAC=ttk.Label(self,text="Baseline air conditioning parameters",font=NORM_FONT)
         labelAC.grid(row=20,column=2,columnspan=3,pady=30,padx=10)
 
-        button4 = ttk.Button(self,text="Done",
+        BLAType = IntVar()
+        BLAType.set(0)
+        rba1 = tk.Radiobutton(self, width=16, text="None", variable=BLAType, value=0, command=lambda: SetBLAScenario(0))
+        rba2 = tk.Radiobutton(self, width=16, text="Central", variable=BLAType, value=1, command=lambda: SetBLAScenario(1))
+        rba3 = tk.Radiobutton(self, width=16, text="Windows",variable=BLAType, value=2, command=lambda: SetBLAScenario(2))
+        rba1.grid(row=22,column=0,padx=20, pady = ys)
+        rba2.grid(row=23,column=0,padx=20, pady = ys)
+        rba3.grid(row=24,column=0,padx=20, pady = ys)
+        rba1.invoke()
+
+        def getACSEER(e):
+            global BaselineSEER
+            s = GetFloat("Central AC SEER Rating", default=BaselineSEER, min=0.)
+            weff = s.result
+            try:
+                BaselineSEER = float(weff)
+            except:
+                print("bad value")
+
+            e.config(text=weff)
+            e.update()
+
+        if BaselineAC == 1 :
+            weff = '{0:.0f}'.format(BaselineSEER)
+        else:
+            weff = ""
+        eA = ttk.Label(self, width=5, text=weff)
+        eA.grid(row=23, column=3)
+        
+        btnA1 =ttk.Button(self,text="SEER", width=20, command=lambda: getACSEER(eA))
+        btnA1.grid(row=23,column=2)
+
+        label3A=ttk.Label(self,text="A/C set point",font=SMALL_FONT)
+        label3A.grid(row=22,column=4,columnspan=2,padx=10, pady = ys)
+            
+        labelAT = ttk.Label(self,text=str(SummerBLSetPoint))
+        buttonA2a = ttk.Button(self,text="Temperature",width=20, 
+                    command = lambda: setACSetPoint(labelAT))
+        buttonA2a.grid(row=23,column=4, pady = ys)
+        labelAT.grid(row=23,column=5, pady = ys)
+
+        button4 = ttk.Button(self,text="Done",width=20, 
                     command = lambda: controller.show_frame(HomePage))
-        button4.grid(row=30, column=3,pady=30)
+        button4.grid(row=30, column=2,pady=30)
 
 def selHeatPump(H,info):
     global firstPlot
@@ -1313,6 +1557,7 @@ def updateHeatPumpInfo(info):
         
 class SelectHeatPumpPage(tk.Frame):
     def __init__(self,parent,controller):
+        global WinterHPSetPoint, SummerHPSetPoint
         HPFilter = ['Ductless','Ducted','All']
 
         HPListIndex2ID = []
@@ -1359,7 +1604,7 @@ class SelectHeatPumpPage(tk.Frame):
         canvas.show()
         canvas.get_tk_widget().grid(column=3, columnspan=3, row=1, rowspan=4)  #fill=tk.BOTH,,pady=10
 
-        text1 = ttk.Label(self,text='Selected Heat Pump Data',font=NORM_FONT)
+        text1 = ttk.Label(self,text='Selected Heat Pump System',font=NORM_FONT)
         text1.grid(row=3,column=0,columnspan=3,sticky=(N,E,W))
         
         text2 = ttk.Label(self,text='',font=NORM_FONT)
@@ -1376,10 +1621,64 @@ class SelectHeatPumpPage(tk.Frame):
         button3 = ttk.Button(self,text="Clear Heat Pump selection",
                     command = lambda: clearHeatPump(text2))
         button3.grid(row=5, column=2)
+
+        def setHHTSetPoint(e): 
+            global WinterHPSetPoint
+            s = GetFloat("Temperature set point", default=WinterHPSetPoint, min=40., max=100.)
+            weff = s.result
+            try:
+                WinterHPSetPoint = float(weff)
+            except:
+                print("bad value")
+            e.config(text=weff)
+            e.update()
+
+        def setHATSetPoint(e): 
+            global SummerHPSetPoint
+            s = GetFloat("Temperature set point", default=SummerHPSetPoint, min=60., max=100.)
+            weff = s.result
+            try:
+                SummerHPSetPoint = float(weff)
+            except:
+                print("bad value")
+            e.config(text=weff)
+            e.update()
+
+        labelHHT = ttk.Label(self,text=str(WinterHPSetPoint))
+        buttonA2a = ttk.Button(self,text="Winter Temp Set Point",width=20, 
+                    command = lambda: setHHTSetPoint(labelHHT))
+        buttonA2a.grid(row=5,column=3)
+        labelHHT.grid(row=5,column=4)
+
+        labelHAT = ttk.Label(self,text=str(SummerHPSetPoint))
+        buttonA2b = ttk.Button(self,text="Summer Temp Set Point",width=20, 
+                    command = lambda: setHATSetPoint(labelHAT))
+        buttonA2b.grid(row=6,column=3)
+        labelHAT.grid(row=6,column=4)
+
+        text2b = ttk.Label(self,text='Heat Pump Hot Water',font=NORM_FONT)
+        text2b.grid(row=6,column=0,columnspan=3,pady=30, sticky=(N,E,W))
+
+        def addHeatPumpHW():
+            pass
+            
+        def delHeatPumpHW():
+            pass
+            
+        button5 = ttk.Button(self,text="Add Heat Pump Water Heater",
+                    command = lambda: addHeatPumpHW)
+        button5.grid(row=7, column=0)
+        
+        button6 = ttk.Button(self,text="Remove Heat Pump Water Heater",
+                    command = lambda: delHeatPumpHW)
+        button6.grid(row=7, column=1)
+
+        text3 = ttk.Label(self,text='',font=NORM_FONT)
+        text3.grid(row=7,column=2,columnspan=3,sticky=(N,E,W))
        
         button4 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
-        button4.grid(row=6,column=1)        
+        button4.grid(row=10,column=1, pady=30)        
 
 class GraphPage(tk.Frame):
     def __init__(self,parent,controller):
@@ -1401,7 +1700,6 @@ class GraphPage(tk.Frame):
         canvas._tkcanvas.pack(side=tk.TOP,fill=tk.BOTH,expand=True)
 
 def isHeating(t) :
-
 # Author: Jonah Kadoko
 # this function determines if the heat pump should heat the room at this particular time
 # Reasons why your heat pump may not turn ON include, but not limited to the following,:
@@ -1417,8 +1715,31 @@ def isHeating(t) :
     yr_Turn_OFF = datetime.datetime(current_Heating_Year + 1, turn_OFF_Date.month, turn_OFF_Date.day)
     yr_Turn_ON = datetime.datetime(current_Heating_Year, turn_ON_Date.month, turn_ON_Date.day)
 
-    if (t_Data[t_Start] <= t_Data[t]) and (t_Data[t] <= yr_Turn_OFF) and \
-    (yr_Turn_ON <= t_Data[t]) and (t_Data[t] <= t_Data[t_End]) and (T_Outdoor[t] < T_Indoor) :
+#    if (t_Data[t_Start] <= t_Data[t]) and (t_Data[t] <= yr_Turn_OFF) and \
+#    (yr_Turn_ON <= t_Data[t]) and (t_Data[t] <= t_Data[t_End]) and (T_Outdoor[t] < WinterHPSetPoint) :
+    if (t_Data[t] <= yr_Turn_OFF) and (yr_Turn_ON <= t_Data[t]) and (T_Outdoor[t] < WinterHPSetPoint) :
+        # t is within range of the heating period and purchase period and the outdoor temperature is below the indoor temperature
+        return True
+    else:
+        return False    
+            
+def isCooling(t) :
+
+# this function determines if the cooling should be applied at this time
+# Reasons why your heat pump may not turn ON include, but not limited to the following,:
+# 1, The outdoor temp is lower than the min operating temp of the heat pump
+# 2, It is in the summer time before your specified turn_ON_Date and after the turn_OFF_Date
+# 3, The heat pump overshoot for that particular hour and so is cycling (not much modelling has been done to simumlate cycling)
+
+    if t_Data[t] <= datetime.datetime(t_Data[t].year, turn_OFF_Date.month, turn_OFF_Date.day) :
+        current_Heating_Year = t_Data[t].year - 1    
+    else:
+        current_Heating_Year = t_Data[t].year
+    
+    yr_Turn_OFF = datetime.datetime(current_Heating_Year + 1, turn_OFF_Date.month, turn_OFF_Date.day)
+    yr_Turn_ON = datetime.datetime(current_Heating_Year, turn_ON_Date.month, turn_ON_Date.day)
+
+    if (T_Outdoor[t] > SummerHPSetPoint) :
         # t is within range of the heating period and purchase period and the outdoor temperature is below the indoor temperature
         return True
     else:
@@ -1469,15 +1790,19 @@ def approxResistance():
     endYear = t_Data[t_End].year
     BaseUnitsByYear.clear()
     BaseCostByYear.clear()
+    BLAC_KWhByYear.clear()
+    HPAC_KWhByYear.clear()
     for year in range(startYear,endYear+1):
         BaseUnitsByYear.append(0.0)
         BaseCostByYear.append(0.0)
+        BLAC_KWhByYear.append(0.0)
+        HPAC_KWhByYear.append(0.0)
 
     # Calculate total annual delta T
     delta_T = 0.0
     for t in range(t_Start,t_End) :
         if isHeating(t):
-            delta_T = delta_T + (T_Indoor - T_Outdoor[t])
+            delta_T = delta_T + (WinterHPSetPoint - T_Outdoor[t])
 
     # Calculate the total oil used
     total_Vol = 0.0
@@ -1525,61 +1850,82 @@ def approxResistance():
 
             # Sum app eligible delta_T during each heating period
     
-            approx_Resistance[p][1] += (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * Quantity_Used * BaseEnergyContent)
+            approx_Resistance[p][1] += (WinterHPSetPoint - T_Outdoor[t]) / (BaseHvacEfficiency * Quantity_Used * BaseEnergyContent)
     
         else:
             if isHeating(t) and (purchase_Date[p + 1] <= thisDate) and (thisDate <= purchase_Date[last_Purchase]) and (p < last_Purchase): 
                 # this particular time sample belongs to the next purchase period
                 p = p + 1
                 approx_Resistance[p][0] = t
-                approx_Resistance[p][1] =  (T_Indoor - T_Outdoor[t]) / (BaseHvacEfficiency * Quantity_Used * BaseEnergyContent)
+                approx_Resistance[p][1] =  (WinterHPSetPoint - T_Outdoor[t]) / (BaseHvacEfficiency * Quantity_Used * BaseEnergyContent)
     
  
     # Average resistance during the heating period
     average_Resistance = delta_T / (BaseHvacEfficiency * BaseEnergyContent * total_Vol)
 
-    
 def heatPumpPerformance(h):
     #Author: Jonah Kadoko
     #this function calculates the approximate min, and max heating capacity, COPave and average electrical consumption
     #One would expect that the required heat be in between the max and min heating capacities
 
-    global last_Purchase
+# argument h: 0 - analyze data for the years provided
+#             other - analyze performance for year h
+    global last_Purchase,t_Start,t_End
     global average_Resistance
-    global Q_required, timeArray
+    global Q_required, QC_required, timeArray, totalRequiredHeating, totalRequiredCooling
     global capacity_Max, capacity_Min, electric_Required, supplemental_Heat, COP_Ave
 
-#    hp = HPList[h]
-    hp = HPChoice[0]
-    
     use_Average_R = True
     
     p = 0
-
-    startYear = t_Data[t_Start].year
-    endYear = t_Data[t_End].year
     
     KWhByYear.clear()
     SuppUnitsByYear.clear()
     SuppUsesByYear.clear()
-#    BaseUnitsByYear.clear()
-#    BaseCostByYear.clear()
+
+    if h==0:
+        startYear = t_Data[t_Start].year
+        endYear = t_Data[t_End].year
         
-    timeArray = [t_Data[t] for t in range(t_Start,t_End)]
-    Q_required = [0.0 for t in range(t_Start, t_End)]
-    capacity_Max = [-1.0 for t in range(t_Start,t_End)]
-    capacity_Min = [0.0 for t in range(t_Start,t_End)]
-    electric_Required = [0.0 for t in range(t_Start,t_End)]
-    supplemental_Heat = [0.0 for t in range(t_Start,t_End)]
-    COP_Ave = [0.0 for t in range(t_Start,t_End)]
+        timeArray = [t_Data[t] for t in range(t_Start,t_End)]
+        Q_required = [0.0 for t in range(t_Start, t_End)]
+        QC_required = [0.0 for t in range(t_Start, t_End)]
+        capacity_Max = [-1.0 for t in range(t_Start,t_End)]
+        capacity_Min = [0.0 for t in range(t_Start,t_End)]
+        electric_Required = [0.0 for t in range(t_Start,t_End)]
+        supplemental_Heat = [0.0 for t in range(t_Start,t_End)]
+        COP_Ave = [0.0 for t in range(t_Start,t_End)]
+    else:
+        startYear = endYear = h
+        t_Start = 0
+        t_End = len(t_Data)
+
+        timeArray1 = [t_Data[t] for t in range(t_Start,t_End)]
+        Q_required1 = [0.0 for t in range(t_Start, t_End)]
+        QC_required1 = [0.0 for t in range(t_Start, t_End)]
+        capacity_Max1 = [-1.0 for t in range(t_Start,t_End)]
+        capacity_Min1 = [0.0 for t in range(t_Start,t_End)]
+        electric_Required1 = [0.0 for t in range(t_Start,t_End)]
+        supplemental_Heat1 = [0.0 for t in range(t_Start,t_End)]
+        COP_Ave1 = [0.0 for t in range(t_Start,t_End)]
+
+        BaseUnitsByYear[0] = 0.
+        BaseCostByYear[0] = 0.
  
     supplementalLastDate = t_Data[0]   # for determining how many supplemental days there are
     oldYear = 1900
+
+    totalRequiredHeating = 0.
+    totalRequiredCooling = 0.
     
     for t in range(t_Start,t_End):
         ti = t-t_Start
-        dateTime = timeArray[ti]
-        year = timeArray[ti].year
+        if h==0:
+            dateTime = timeArray[ti]
+        else:
+            dateTime = timeArray1[ti]
+            
+        year = dateTime.year
         Y = year - startYear
         
         if year > oldYear:
@@ -1587,8 +1933,7 @@ def heatPumpPerformance(h):
             KWhByYear.append(0.0)
             SuppUnitsByYear.append(0.0)
             SuppUsesByYear.append(0)
-            BaseUnitsByYear.append(0.0)        
-        
+            
         # Calculate the perfomance
         if (use_Average_R) : 
             resistance = average_Resistance            
@@ -1611,36 +1956,57 @@ def heatPumpPerformance(h):
 
         if isHeating(t):
     
-            if (purchase_Date[p] <= t_Data[t].date()) and (t_Data[t].date() <= purchase_Date[p + 1]) and (p < last_Purchase) :
-                # Sum app eligible delta_T during each heating period
-                Q_required[ti] = (T_Indoor - temp)/ resistance
-            else:
-                if (purchase_Date[p + 1] <= t_Data[t].date()) and (t_Data[t].date() <= purchase_Date[last_Purchase]) and (p < last_Purchase) :
-                    # this particular time sample belongs to the next purchase period
-                    p = p + 1
-                    Q_required[ti] = (T_Indoor - temp) / resistance
-    
-        else:
-            Q_required[ti] = 0
-                
-        capacity_Max[ti] = CAP_Max
-        capacity_Min[ti] = CAP_Min
-        COP_Ave[ti] = 0.0
+#           if (purchase_Date[p] <= t_Data[t].date()) and (t_Data[t].date() <= purchase_Date[p + 1]) and (p < last_Purchase) :
+#               # Sum app eligible delta_T during each heating period
+#               Q_required[ti] = (WinterHPSetPoint - temp)/ resistance
+#           else:
+#               if (purchase_Date[p + 1] <= t_Data[t].date()) and (t_Data[t].date() <= purchase_Date[last_Purchase]) and (p < last_Purchase) :
+#                   # this particular time sample belongs to the next purchase period
+#                  p = p + 1
+#                  Q_required[ti] = (WinterHPSetPoint - temp) / resistance
+
+            heating_required = (WinterHPSetPoint - temp)/ resistance
+            cooling_required = 0.            
+        elif isCooling(t):
+            heating_required = 0.
+            cooling_required = (temp - SummerHPSetPoint)/ resistance
+
+        if h==0:
+            Q_required[ti] = heating_required
+            QC_required[ti]= cooling_required
+            capacity_Max[ti] = CAP_Max
+            capacity_Min[ti] = CAP_Min
+            
+        totalRequiredHeating += heating_required
+        totalRequiredCooling += cooling_required
+
+        COPave = 0.0        
                         
         # calculate the average values of the above
         # Linear interpolation, doesn't work well
         # COP_Ave(t, h) = (Q_required(t) - capacity_Min(t, h)) * (COP_Max - COP_Min) / (capacity_Max(t, h) - capacity_Min(t, h)) + COP_Min          
         # Weighted average works better
 #        c = (abs(Q_required[t] - capacity_Min[t]) * COP_Min + abs(Q_required[t] - capacity_Max[t]) * COP_Max)
+
+        # for years with purchase data - use purchase data for baseline units and cost
+        # for analysis of average and extreme, back-calculate what we would have used
+        if h!= 0:
+            BaseUnitsByYear[Y] += heating_required/BaseHvacEfficiency/BaseEnergyContent
+            BaseCostByYear[Y] += BaseCostPerUnit*heating_required/BaseHvacEfficiency/BaseEnergyContent
         
         # Note times where the heat pump cannot meet demand
-        if (Q_required[ti] > capacity_Max[ti]) :
-            for i in range(np):                
-                COP_Ave[ti] += COP_Max[i]/np
+        if (heating_required > CAP_Max) :
+            for i in range(np): 
+                COPave += COP_Max[i]/np
                 
-            supplemental_Heat[ti] = Q_required[ti] - capacity_Max[ti]
-            SuppUnitsByYear[Y] += supplemental_Heat[ti]/SuppHvacEfficiency/SuppEnergyContent
+            supplemental_required = heating_required - CAP_Max
             
+            if h==0:
+                supplemental_Heat[ti] = supplemental_required
+
+            SuppUnitsByYear[Y] += supplemental_required/SuppHvacEfficiency/SuppEnergyContent
+            
+                
             # is this a new supplemental usage (within 24 hours of the past one)
             deltaTime = dateTime - supplementalLastDate
             if deltaTime>datetime.timedelta(1,0)  : #timeDelta(0,0,1,0,0)
@@ -1648,30 +2014,46 @@ def heatPumpPerformance(h):
                 SuppUsesByYear[Y] += 1
                 
             # The amount of electricity required to heat the area with Q_required BTUs
-            electric_Required[ti] = capacity_Max[ti] / COP_Ave[ti] /ENERGY_CONTENT_ELEC
-            KWhByYear[Y] += electric_Required[ti]
+            electric_required = CAP_Max / COPave/ENERGY_CONTENT_ELEC
+            
+            if h==0:
+                electric_Required[ti] = electric_required
+                
+            KWhByYear[Y] += electric_required
         
         else:
-            if (Q_required[ti] < capacity_Min[ti]):
+            if (heating_required < CAP_Min):
                 for i in range(np):                
-                    COP_Ave[ti] += COP_Min[i]/np
+                    COPave += COP_Min[i]/np
             
             else:
                 #Linear interpolation, doesn't work well
                 #COP_Ave[t] = ((abs(Q_required[t] - capacity_Min[t]) * COP_Min + \
                 #    abs(Q_required[t] - capacity_Max[t]) * COP_Max)) / abs(capacity_Max[t] - capacity_Min[t]) 
                 for i in range(np):                
-                    COP_Ave[ti] += COP_Min[i] + ((Q_required[ti] - capacity_Min[ti]) * (COP_Max[i] - COP_Min[i])) / (capacity_Max[ti] - capacity_Min[ti]) /np
+                    COPave += COP_Min[i] + ((heating_required - CAP_Min) * (COP_Max[i] - COP_Min[i])) / (CAP_Max - CAP_Min) /np
                 
             # The amount of electricity required to heat the area with Q_required BTUs
-            electric_Required[ti] = Q_required[ti] / COP_Ave[ti]/ENERGY_CONTENT_ELEC     
-            KWhByYear[Y] += electric_Required[ti]
-
-        a = 1        
+            electric_required = heating_required / COPave /ENERGY_CONTENT_ELEC     
+            KWhByYear[Y] += electric_required
+            if h==0:
+                electric_Required[ti] = electric_required
                 
-    #this could be a perfomance scale for heat pumps
-    return 1
-    
+        if (cooling_required > 0) :
+            if BaselineAC != 0 and BaselineSEER>0:
+                BLAC_KWhByYear[Y] += cooling_required / BaselineSEER/1000.
+
+            # weighted average SEER based on fraction of total capacity at 47 degrees
+            HPSEER = 0.
+            CAPTOTAL = 0.
+            for hp in HPChoice:
+                HPSEER += float(hp.SEER) * hp.MaxCapacity(47)
+                CAPTOTAL += hp.MaxCapacity(47)
+            HPSEER = HPSEER/CAPTOTAL
+                 
+            if HPSEER>0.:
+                HPAC_KWhByYear[Y] += cooling_required / HPSEER/1000.
+                                    
 def outputData(H):
     # This routine outputs all results to a text file
     global last_Purchase
