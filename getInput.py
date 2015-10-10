@@ -19,7 +19,7 @@ class GetString(tkSimpleDialog.Dialog):
         self.label = ttk.Label(master,text=self.msg,font=NORM_FONT)
         self.label.pack(side="top", fill="x",pady=10)
         self.entry = tk.Entry(master, width=12, justify=CENTER)
-        self.entry.bind("<Return>", self.validate)
+#        self.entry.bind("<Return>", self.validate)
         self.entry.delete(0,END)
         self.entry.insert(0,self.default)
         self.entry.pack(side="top", fill="x",pady=10)
