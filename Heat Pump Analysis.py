@@ -240,6 +240,15 @@ a3.set_autoscalex_on(True)
 a3.set_autoscaley_on(True)
 plt.grid(True)
 
+f4 = plt.figure()
+a4 = plt.subplot2grid((3,3), (0,0), rowspan = 4, colspan = 3)
+a4.set_ylabel('Cost')
+a4.set_xlabel('Years after investment')
+a4.set_ylim(0.,50000.)
+a4.set_autoscalex_on(True)
+a4.set_autoscaley_on(True)
+plt.grid(True)
+
 def popupmsg(title, msg):
     
     popup = tk.Tk()
@@ -865,15 +874,21 @@ def doHeatPumpAnalysis(status,text):
     HighestHDDYear = 2003
     HighestCDDYear = 2010
     
-    hpNames = ""
-    n = 0
-    for hp in HPChoice :
-        hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit
-        n += 1
-        if n<len(HPChoice):
-            hpNames += "+"
+    if len(HPChoice)==0 and HPWaterHeaterCOP==0 :
+        popupmsg("Heat Pump Analysis Tool","No heat pump or H.P. water heater selected")
+        return
+    elif len(purchase_Date)<=0 :
+        popupmsg("Heat Pump Analysis Tool","Enter purchase data which defines analysis time period")
+        
+    if len(HPChoice)>0:
+        hpNames = ""
+        n = 0
+        for hp in HPChoice :
+            hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit
+            n += 1
+            if n<len(HPChoice):
+                hpNames += "+"
 
-#    H = 13   #   the heat pump chosen
     if updateTemp :
         status.config(text="Loading temperature data for period")
         status.update()
@@ -887,11 +902,11 @@ def doHeatPumpAnalysis(status,text):
         approxResistance()
         updateResistance = False
 
-    status.config(text="Analyzing heat pump performance")
-    status.update()
-    p = heatPumpPerformance(0)
-    
-    
+    if len(HPChoice)>0:
+        status.config(text="Analyzing heat pump performance")
+        status.update()
+        p = heatPumpPerformance(0)
+        
     totSavings = totBaseEmissions = totHPEmissions = totSuppEmissions = 0.
     totHPACEmissions = totBLACEmissions = 0.0
     totHPHWEmissions = totBLHWEmissions = 0.0
@@ -899,7 +914,13 @@ def doHeatPumpAnalysis(status,text):
     BLAC = BaselineAC != 0 and SummerBLSetPoint> 0
     HPAC = SummerHPSetPoint>0
 
-    results = "\nAnalysis of heat pump performance for " + hpNames +"\n\n"
+    # header line
+    if len(HPChoice)>0:
+        results = "\nAnalysis of heat pump performance for " + hpNames +"\n\n"
+    else:
+        results = "\nAnalysis of heat pump water heater, COP = %.1f\n\n" % (HPWaterHeaterCOP)
+        
+    # First line of table
     results += "\tBaseline ("+BaseHeatType+")\t\t"
 
     if WaterHeatType == BaseHeatType and WaterHeatMonthlyUsage>0:
@@ -910,16 +931,21 @@ def doHeatPumpAnalysis(status,text):
 
     results += " |  "
 
-    results += "Heat Pump\t\t\t"
+    if len(HPChoice)>0:
+        results += "Heat Pump\t\t\t"
+        
     if HPWaterHeaterCOP>0:
         results += "Hot Water\t\t"
-    results += " |  "
-    results += "Supplemental ("+SuppHeatType+")\t\t\t"
+    if len(HPChoice)>0:
+        results += " |  "
+        results += "Supplemental ("+SuppHeatType+")\t\t\t"
 
-    if HPAC:
-        results += "Air Conditioning"
+        if HPAC:
+            results += "Air Conditioning"
+
     results +="\n"
     
+    # second line of table
     results += "Year\t"+BaseEnergyUnits+"\tCost\t"
 
     if WaterHeatType == BaseHeatType and WaterHeatMonthlyUsage>0:
@@ -930,15 +956,19 @@ def doHeatPumpAnalysis(status,text):
 
     results += " |  "
 
-    results += "KWh\tCost\tCOP\t"
+    if len(HPChoice)>0:
+        results += "KWh\tCost\tCOP\t"
+        
     if HPWaterHeaterCOP>0:
         results += "KWh\tCost\t"
         
-    results += " |  "
+    if len(HPChoice)>0:
+        results += " |  "
 
-    results += "#days\t"+SuppEnergyUnits+"\tCost\t"
-    if HPAC:
-        results += "kWh\tCost\t"
+        results += "#days\t"+SuppEnergyUnits+"\tCost\t"
+        if HPAC:
+            results += "kWh\tCost\t"
+
     results += "\n"
 
     startYear = t_Data[t_Start].year
@@ -959,8 +989,10 @@ def doHeatPumpAnalysis(status,text):
         
         resultline += " |  "
 
-        COPAve = BaseUnitsByYear[Y]*BaseHvacEfficiency*(BaseEnergyContent/ENERGY_CONTENT_ELEC)/KWhByYear[Y]
-        resultline += "%.0f\t$%.0f\t%.1f\t" % (KWhByYear[Y],KWhByYear[Y]*STANDARD_PRICE_ELEC,COPAve)
+        if len(HPChoice)>0:
+            COPAve = BaseUnitsByYear[Y]*BaseHvacEfficiency*(BaseEnergyContent/ENERGY_CONTENT_ELEC)/KWhByYear[Y]
+            resultline += "%.0f\t$%.0f\t%.1f\t" % (KWhByYear[Y],KWhByYear[Y]*STANDARD_PRICE_ELEC,COPAve)
+
         HPWaterUnits = 0
         if HPWaterHeaterCOP>0:
             HPWaterUnits = 12.*WaterHeatMonthlyUsage*WaterEnergyContent/ENERGY_CONTENT_ELEC/HPWaterHeaterCOP
@@ -970,25 +1002,32 @@ def doHeatPumpAnalysis(status,text):
 
         resultline += " |  "
 
-
-        resultline += "%d\t%.0f\t$%.0f\t" % (SuppUsesByYear[Y],SuppUnitsByYear[Y],SuppUnitsByYear[Y]*SuppCostPerUnit)
+        if len(HPChoice)>0:
+            resultline += "%d\t%.0f\t$%.0f\t" % (SuppUsesByYear[Y],SuppUnitsByYear[Y],SuppUnitsByYear[Y]*SuppCostPerUnit)
         
-        if HPAC:
-            resultline += "%.0f\t$%.0f" % (HPAC_KWhByYear[Y],HPAC_KWhByYear[Y]*STANDARD_PRICE_ELEC)
+            if len(HPChoice)>0:
+                if HPAC:
+                    resultline += "%.0f\t$%.0f" % (HPAC_KWhByYear[Y],HPAC_KWhByYear[Y]*STANDARD_PRICE_ELEC)
             
         resultline += "\n"
             
         results += resultline
-        totSavings += BaseCostByYear[Y] - (KWhByYear[Y]*STANDARD_PRICE_ELEC + SuppUnitsByYear[Y]*SuppCostPerUnit) 
+
+        if len(HPChoice)>0:
+            totSavings += BaseCostByYear[Y] - (KWhByYear[Y]*STANDARD_PRICE_ELEC + SuppUnitsByYear[Y]*SuppCostPerUnit) 
         if BLAC or HPAC :
             totSavings += (BLAC_KWhByYear[Y]-HPAC_KWhByYear[Y]) * STANDARD_PRICE_ELEC
+        if HPWaterHeaterCOP>0:
+            totSavings += 12.*WaterHeatMonthlyUsage * WaterCostPerUnit - HPWaterUnits*STANDARD_PRICE_ELEC
             
         totBaseEmissions += BaseKgCO2PerUnit*BaseUnitsByYear[Y]
         totBLHWEmissions += WaterKgCO2PerUnit*waterUsage
-        totHPEmissions += ElecKgCO2PerUnit*KWhByYear[Y]
-        totSuppEmissions += SuppKgCO2PerUnit*SuppUnitsByYear[Y]
-        totBLACEmissions += BLAC_KWhByYear[Y]*ElecKgCO2PerUnit
-        totHPACEmissions += HPAC_KWhByYear[Y]*ElecKgCO2PerUnit
+        if len(HPChoice)>0:
+            totHPEmissions   += ElecKgCO2PerUnit*KWhByYear[Y]
+            totSuppEmissions += SuppKgCO2PerUnit*SuppUnitsByYear[Y]
+        if BLAC or HPAC:
+            totBLACEmissions += BLAC_KWhByYear[Y]*ElecKgCO2PerUnit
+            totHPACEmissions += HPAC_KWhByYear[Y]*ElecKgCO2PerUnit
         totHPHWEmissions += HPWaterUnits*ElecKgCO2PerUnit
     
     if totSavings>0 :
@@ -996,7 +1035,11 @@ def doHeatPumpAnalysis(status,text):
     else:
         savingsImpact = "cost an additional"
         
-    CO2_percent_impact = (100.*(totBaseEmissions + totBLACEmissions - totHPEmissions - totSuppEmissions- totHPACEmissions))
+    CO2_percent_impact = 0
+    if len(HPChoice)>0:
+        CO2_percent_impact += (100.*(totBaseEmissions  - totHPEmissions - totSuppEmissions))
+    if BLAC or HPAC:
+        CO2_percent_impact += (100.*(totBLACEmissions- totHPACEmissions))
     if totHPHWEmissions > 0:
         CO2_percent_impact += 100.*(totBLHWEmissions - totHPHWEmissions)
     CO2_percent_impact /= (totBaseEmissions+totBLACEmissions+totBLHWEmissions)
@@ -1008,7 +1051,7 @@ def doHeatPumpAnalysis(status,text):
     results += "\nOver the years %d-%d, the heat pump would have %s $%.0f, emitting %.0f%% %s CO2eq than %s\n" % (startYear+1,endYear-1,savingsImpact, abs(totSavings), CO2_percent_impact, CO2Impact,BaseHeatType)
 
     analyzeExtremes = True
-    if analyzeExtremes:
+    if len(HPChoice)>0 and analyzeExtremes:
         for year in (AverageHDDYear, HighestHDDYear) :
         # average year first
             LoadTempDataRaw(status,year)
@@ -1057,8 +1100,10 @@ def doHeatPumpAnalysis(status,text):
     status.config(text="Saving results")
     status.update()
     outputData(0,results)
-    
-    updateGraph = True
+
+    if len(HPChoice)>0:
+        updateGraph = True
+        animate(0)
 
 def LoadDeliveriesDlg(parent,listbox,lbHdr) :
     
@@ -1872,11 +1917,34 @@ class EconomicsPage(tk.Frame):
         tk.Frame.__init__(self,parent)
         
         label=ttk.Label(self,text="Economic Payback Calculation",font=LARGE_FONT)        
-        label.pack(pady=10,padx=10)
-        
-        button1 = ttk.Button(self,text="Done",
+        label.grid(row = 0, column = 2, columnspan=2, pady=10,padx=10)
+
+        button1 = ttk.Button(self,text="Equipment Cost",width=16,
                     command = lambda: controller.show_frame(HomePage))
-        button1.pack()
+        button1.grid(row=1, column=0)
+
+        button2 = ttk.Button(self,text="Installation Cost",width=16,
+                    command = lambda: controller.show_frame(HomePage))
+        button2.grid(row=2, column=0)
+        
+        button3 = ttk.Button(self,text="Rebate incentives",width=16,
+                    command = lambda: controller.show_frame(HomePage))
+        button3.grid(row=3, column=0)
+
+        button4 = ttk.Button(self,text="Tax incentives",width=16,
+                    command = lambda: controller.show_frame(HomePage))
+        button4.grid(row=4, column=0)
+
+        text1 = ttk.Label(self,text='',width=60, font=NORM_FONT)
+        text1.grid(row=8,column=0,columnspan=3,sticky=(N,E,W))
+
+        canvas = FigureCanvasTkAgg(f4,self)
+        canvas.show()
+        canvas.get_tk_widget().grid(column=3, columnspan=3, row=8)  #fill=tk.BOTH,,pady=10
+        
+        button10 = ttk.Button(self,text="Done",
+                    command = lambda: controller.show_frame(HomePage))
+        button10.grid(row=10, column=2)
         
 def isHeating(t) :
 # Author: Jonah Kadoko
@@ -2263,10 +2331,10 @@ def outputData(H,results):
     output.write('Analysis for: '+hpNames +'\r')
     
     
-    for tv in range(t_Start,t_End):
-        t= tv-t_Start
+#    for tv in range(t_Start,t_End):
+#        t= tv-t_Start
     
-        output.write(timeArray[t].ctime()+'\t{0:.2f}\t{1:f}\t{2:f}\t{3:f}\t{4:f}\n'.format(Q_required[t],electric_Required[t],supplemental_Heat[t], capacity_Max[t],COP_Ave[t]))
+#        output.write(timeArray[t].ctime()+'\t{0:.2f}\t{1:f}\t{2:f}\t{3:f}\t{4:f}\n'.format(Q_required[t],electric_Required[t],supplemental_Heat[t], capacity_Max[t],COP_Ave[t]))
 
     output.write(results)
     output.close()
@@ -2278,7 +2346,7 @@ loadHeatPumps()
 # main routine 
 
 app = HeatPumpPerformanceApp()
-ani = animation.FuncAnimation(f,animate, interval=1000)
+#ani = animation.FuncAnimation(f,animate, interval=1000)
 app.mainloop()
 app.destroy()
 
