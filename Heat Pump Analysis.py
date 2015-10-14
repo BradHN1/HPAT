@@ -122,6 +122,7 @@ BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.
 BaseEnergyUnits = UNITS_OIL
 BaseKgCO2PerUnit = KGCO2_PER_UNIT_OIL
 BaseCostPerUnit = STANDARD_PRICE_OIL
+BaseInflationRate = 0.05
 
 # supplemental system - augments the HeatPump system to meet necessary capacity
 SuppHeatType = BaseHeatType
@@ -132,6 +133,7 @@ SuppKgCO2PerUnit = BaseKgCO2PerUnit
 SuppCostPerUnit = BaseCostPerUnit
 
 SuppOutdoorTempNABL = 0         # automatically enable supplemental system below this temperature
+SuppInflationRate = BaseInflationRate
 
 
 # water heating system - augments the HeatPump system to meet necessary capacity
@@ -141,7 +143,9 @@ WaterEnergyContent = BaseEnergyContent
 WaterEnergyUnits = BaseEnergyUnits
 WaterKgCO2PerUnit = BaseKgCO2PerUnit
 WaterCostPerUnit = BaseCostPerUnit
-WaterHeatMonthlyUsage = 24              # in WaterEnergyUnits - which if same as BaseEnergyUnits are subtracted from heat load
+
+WaterHeatMonthlyBTU = 2.4e6
+WaterHeatMonthlyUsage = WaterHeatMonthlyBTU/WaterEnergyContent    # in WaterEnergyUnits if same as BaseEnergyUnits are subtracted from heat load
 WaterHeatCombinedBill = True            # if the fuel for water heating is combined with the fuel from heating (not separately metered)
 HPWaterHeaterCOP = 0.0
 
@@ -149,6 +153,15 @@ HPWaterHeaterCOP = 0.0
 # ACUsage
 
 ElecKgCO2PerUnit = KGCO2_PER_UNIT_ELEC
+ElectricInflationRate = BaseInflationRate
+
+AlternativeReplacementCost = 0
+AlternativeReplacementYears = 0
+
+HeatPumpAverageUnits = 0
+BaseAverageUnits = 0
+BLACAverageUnits = 0
+SuppAverageUnits = 0
 
 T_Outdoor = [] # (1 To SITE_DATA_MAX) As Single ' outdoor temperature
 # T_Indoor = 65  #  As Single 'indoor temperaure as provided by the user
@@ -241,7 +254,7 @@ a3.set_autoscaley_on(True)
 plt.grid(True)
 
 f4 = plt.figure()
-a4 = plt.subplot2grid((3,3), (0,0), rowspan = 4, colspan = 3)
+a4 = plt.subplot2grid((2,2), (0,0), rowspan = 3, colspan = 3)
 a4.set_ylabel('Cost')
 a4.set_xlabel('Years after investment')
 a4.set_ylim(0.,50000.)
@@ -376,35 +389,49 @@ def SetSuppHeat(BLT) :
 
     updateResistance = True
 
-def SetBLWScenario(BLT) :
-    global WaterHeatType
+def SetBLWScenario(BLT,b,e) :
+    global WaterHeatType,WaterHeatEfficiency,WaterEnergyContent,WaterEnergyUnits,WaterKgCO2PerUnit,WaterCostPerUnit
+    global WaterHeatMonthlyUsage
     global UpdateResistance
-    
+
     if BLT == HEAT_TYPE_OIL :    # oil
         WaterHeatType = HEAT_NAME_OIL
-    if BLT == HEAT_TYPE_ELEC :    # oil
+        WaterHeatEfficiency = EFFICIENCY_HVAC_OIL
+        WaterEnergyContent = ENERGY_CONTENT_OIL
+        WaterEnergyUnits = UNITS_OIL
+        WaterKgCO2PerUnit = KGCO2_PER_UNIT_OIL
+        WaterCostPerUnit = STANDARD_PRICE_OIL
+    if BLT == HEAT_TYPE_ELEC :    # electric resistance
         WaterHeatType = HEAT_NAME_ELEC
-    if BLT == HEAT_TYPE_GAS :    # oil
+        WaterHeatEfficiency = EFFICIENCY_HVAC_ELEC
+        WaterEnergyContent = ENERGY_CONTENT_ELEC
+        WaterEnergyUnits = UNITS_ELEC
+        WaterKgCO2PerUnit = KGCO2_PER_UNIT_ELEC
+        WaterCostPerUnit = STANDARD_PRICE_ELEC
+    if BLT == HEAT_TYPE_GAS :    # gas
         WaterHeatType = HEAT_NAME_GAS
-    if BLT == HEAT_TYPE_LPG :    # oil
+        WaterHeatEfficiency = EFFICIENCY_HVAC_GAS
+        WaterEnergyContent = ENERGY_CONTENT_GAS
+        WaterEnergyUnits = UNITS_GAS
+        WaterKgCO2PerUnit = KGCO2_PER_UNIT_GAS
+        WaterCostPerUnit = STANDARD_PRICE_GAS
+    if BLT == HEAT_TYPE_LPG :    # LPG
         WaterHeatType = HEAT_NAME_LPG
-    elif BLT == HEAT_TYPE_OTHER : 
-        gs = GetString("Specify water energy source", default=HEAT_NAME_OIL)
-        if gs.result:
-            WaterHeatType = gs.result
-            
-        else:
-            waterHeatType = BaseHeatType
-        print("Other baseline heating types not supported")
-    print("Water scenario chosen: "+WaterHeatType)
+        WaterHeatEfficiency = EFFICIENCY_HVAC_LPG
+        WaterEnergyContent = ENERGY_CONTENT_LPG
+        WaterEnergyUnits = UNITS_LPG
+        WaterKgCO2PerUnit = KGCO2_PER_UNIT_LPG
+        WaterCostPerUnit = STANDARD_PRICE_LPG
 
-    # for now, assume supplemental system is same as the baseline system
-    SuppHeatType = BaseHeatType
-    SuppHvacEfficiency = BaseHvacEfficiency
-    SuppEnergyContent = BaseEnergyContent     
-    SuppEnergyUnits = BaseEnergyUnits
-    SuppKgCO2PerUnit = BaseKgCO2PerUnit
-    SuppCostPerUnit = BaseCostPerUnit
+    print("Water scenario chosen: "+WaterHeatType)
+    WaterHeatMonthlyUsage = WaterHeatMonthlyBTU/WaterEnergyContent      
+
+    btt = "Estimated Monthly %s" % (WaterEnergyUnits)
+    b.config(text=btt)
+    b.update()
+    ett = "%.1f" % (WaterHeatMonthlyUsage)
+    e.config(text=ett)
+    e.update()
     
     UpdateResistance = True
 
@@ -867,6 +894,7 @@ class HeatPumpPerformanceApp(tk.Tk):
 
 def doHeatPumpAnalysis(status,text): 
     global updateGraph, updateTemp, updateResistance
+    global HeatPumpAverageUnits, BaseAverageUnits, SuppAverageUnits
 
     # certain years of note since 1993zzzzz
     AverageHDDYear = 2008
@@ -874,7 +902,7 @@ def doHeatPumpAnalysis(status,text):
     HighestHDDYear = 2003
     HighestCDDYear = 2010
     
-    if len(HPChoice)==0 and HPWaterHeaterCOP==0 :
+    if len(HPChoice)==0 and HPWaterHeaterCOP==0 and SuppHeatType==BaseHeatType:
         popupmsg("Heat Pump Analysis Tool","No heat pump or H.P. water heater selected")
         return
     elif len(purchase_Date)<=0 :
@@ -906,6 +934,10 @@ def doHeatPumpAnalysis(status,text):
         status.config(text="Analyzing heat pump performance")
         status.update()
         p = heatPumpPerformance(0)
+    elif SuppHeatType != BaseHeatType:
+        status.config(text="Analyzing supplemental system performance")  
+        status.update()
+        p = heatPumpPerformance(0)
         
     totSavings = totBaseEmissions = totHPEmissions = totSuppEmissions = 0.
     totHPACEmissions = totBLACEmissions = 0.0
@@ -917,13 +949,15 @@ def doHeatPumpAnalysis(status,text):
     # header line
     if len(HPChoice)>0:
         results = "\nAnalysis of heat pump performance for " + hpNames +"\n\n"
-    else:
+    elif HPWaterHeaterCOP>0:
         results = "\nAnalysis of heat pump water heater, COP = %.1f\n\n" % (HPWaterHeaterCOP)
+    elif SuppHeatType != BaseHeatType:
+        results = "\nAnalysis of supplemental heat system change to %s\n\n" % (SuppHeatType)
         
     # First line of table
     results += "\tBaseline ("+BaseHeatType+")\t\t"
 
-    if WaterHeatType == BaseHeatType and WaterHeatMonthlyUsage>0:
+    if (WaterHeatType == BaseHeatType and WaterHeatMonthlyUsage>0) or WaterHeatType == HEAT_NAME_ELEC:
         results += "Hot Water\t\t"
         
     if BLAC:
@@ -936,11 +970,11 @@ def doHeatPumpAnalysis(status,text):
         
     if HPWaterHeaterCOP>0:
         results += "Hot Water\t\t"
-    if len(HPChoice)>0:
+    if len(HPChoice)>0 or SuppHeatType != BaseHeatType:
         results += " |  "
         results += "Supplemental ("+SuppHeatType+")\t\t\t"
 
-        if HPAC:
+    if len(HPChoice)>0:
             results += "Air Conditioning"
 
     results +="\n"
@@ -950,6 +984,9 @@ def doHeatPumpAnalysis(status,text):
 
     if WaterHeatType == BaseHeatType and WaterHeatMonthlyUsage>0:
         results += BaseEnergyUnits+"\tCost\t"
+    elif WaterHeatType==HEAT_NAME_ELEC:
+        results += "KWh\tCost\t"
+        
 
     if BLAC:
         results += "kWh\tCost\t"
@@ -962,12 +999,12 @@ def doHeatPumpAnalysis(status,text):
     if HPWaterHeaterCOP>0:
         results += "KWh\tCost\t"
         
-    if len(HPChoice)>0:
+    if len(HPChoice)>0 or SuppHeatType!=BaseHeatType:
         results += " |  "
 
         results += "#days\t"+SuppEnergyUnits+"\tCost\t"
-        if HPAC:
-            results += "kWh\tCost\t"
+    if len(HPChoice)>0:
+        results += "kWh\tCost\t"
 
     results += "\n"
 
@@ -979,10 +1016,14 @@ def doHeatPumpAnalysis(status,text):
         resultline = "%d\t%.0f\t$%.0f\t" % (year,BaseUnitsByYear[Y],BaseCostByYear[Y])
         waterUsage = 12.*WaterHeatMonthlyUsage
         if waterUsage>0:
-            if WaterHeatCombinedBill:
+            if WaterHeatType==BaseHeatType:
                 waterCost = waterUsage*(BaseCostByYear[Y]/BaseUnitsByYear[Y])
+            elif WaterHeatType == HEAT_NAME_ELEC:
+ #               waterCost = waterUsage*WaterCostperUnit 
+                waterCost = waterUsage*STANDARD_PRICE_ELEC
             else:
-                waterCost = waterUsage*WaterCostperUnit 
+                waterCost = 0
+                print("WaterHeatType="+WaterHeatType)
             resultline += "%.0f\t$%.0f\t" % (waterUsage,waterCost )  
         if BLAC:
             resultline += "%.0f\t$%.0f\t" % (BLAC_KWhByYear[Y],BLAC_KWhByYear[Y]*STANDARD_PRICE_ELEC)
@@ -1002,7 +1043,7 @@ def doHeatPumpAnalysis(status,text):
 
         resultline += " |  "
 
-        if len(HPChoice)>0:
+        if len(HPChoice)>0 or SuppHeatType!=BaseHeatType:
             resultline += "%d\t%.0f\t$%.0f\t" % (SuppUsesByYear[Y],SuppUnitsByYear[Y],SuppUnitsByYear[Y]*SuppCostPerUnit)
         
             if len(HPChoice)>0:
@@ -1013,7 +1054,7 @@ def doHeatPumpAnalysis(status,text):
             
         results += resultline
 
-        if len(HPChoice)>0:
+        if len(HPChoice)>0 or SuppHeatType!=BaseHeatType:
             totSavings += BaseCostByYear[Y] - (KWhByYear[Y]*STANDARD_PRICE_ELEC + SuppUnitsByYear[Y]*SuppCostPerUnit) 
         if BLAC or HPAC :
             totSavings += (BLAC_KWhByYear[Y]-HPAC_KWhByYear[Y]) * STANDARD_PRICE_ELEC
@@ -1022,7 +1063,7 @@ def doHeatPumpAnalysis(status,text):
             
         totBaseEmissions += BaseKgCO2PerUnit*BaseUnitsByYear[Y]
         totBLHWEmissions += WaterKgCO2PerUnit*waterUsage
-        if len(HPChoice)>0:
+        if len(HPChoice)>0 or SuppHeatType!=BaseHeatType:
             totHPEmissions   += ElecKgCO2PerUnit*KWhByYear[Y]
             totSuppEmissions += SuppKgCO2PerUnit*SuppUnitsByYear[Y]
         if BLAC or HPAC:
@@ -1036,7 +1077,7 @@ def doHeatPumpAnalysis(status,text):
         savingsImpact = "cost an additional"
         
     CO2_percent_impact = 0
-    if len(HPChoice)>0:
+    if len(HPChoice)>0 or SuppHeatType!=BaseHeatType:
         CO2_percent_impact += (100.*(totBaseEmissions  - totHPEmissions - totSuppEmissions))
     if BLAC or HPAC:
         CO2_percent_impact += (100.*(totBLACEmissions- totHPACEmissions))
@@ -1047,8 +1088,14 @@ def doHeatPumpAnalysis(status,text):
         CO2Impact = "less"
     else:
         CO2Impact = "more"
-        
-    results += "\nOver the years %d-%d, the heat pump would have %s $%.0f, emitting %.0f%% %s CO2eq than %s\n" % (startYear+1,endYear-1,savingsImpact, abs(totSavings), CO2_percent_impact, CO2Impact,BaseHeatType)
+
+    if len(HPChoice)>0:
+        change = "heat pump system"
+    elif HPWaterHeaterCOP>0:
+        change = "heat pump water heater"
+    elif SuppHeatType!=BaseHeatType:
+        change = "change to "+SuppHeatType
+    results += "\nOver the years %d-%d, the %s would have %s $%.0f, emitting %.0f%% %s CO2eq than %s\n" % (startYear+1,endYear-1,change,savingsImpact, abs(totSavings), CO2_percent_impact, CO2Impact,BaseHeatType)
 
     analyzeExtremes = True
     if len(HPChoice)>0 and analyzeExtremes:
@@ -1086,6 +1133,17 @@ def doHeatPumpAnalysis(status,text):
             percentOfLoad = 100.* (totalRequiredHeating  - SuppUnitsByYear[0]*SuppEnergyContent)/totalRequiredHeating
             
             if year == AverageHDDYear:
+                HeatPumpAverageUnits = KWhByYear[0] + HPAC_KWhByYear[0]
+                BaseAverageUnits = BaseUnitsByYear[0]
+                if HPWaterHeaterCOP>0 :
+                     HeatPumpAverageUnits += HPWaterUnits
+                     BaseAverageUnits += waterUsage
+                if BLAC:
+                    BLACAverageUnits = BLAC_KWhByYear[0]
+                else:
+                    BLACAverageUnits = 0.
+                    
+                SuppAverageUnits = SuppUnitsByYear[0]
                 adj = "Average"
             else:
                 adj = "Coldest"
@@ -1198,7 +1256,9 @@ def UpdateDeliveryGraph(self):
     
         a3.clear()
         a3.plot_date(tArray,fuel_required, "g", label = "Total monthly fuel consumption")   
-        a3.plot_date(ta1, ma1, "r", label = "Fuel for water and cooking")    
+
+        if WaterHeatType==BaseHeatType and WaterHeatCombinedBill:
+            a3.plot_date(ta1, ma1, "r", label = "Fuel for water and cooking")    
 
         a3.legend(bbox_to_anchor=(0,0.92,1,.102),loc=3, ncol=3, borderaxespad=0)
         
@@ -1213,10 +1273,10 @@ class StartPage(tk.Frame) :
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
         
-        label=ttk.Label(self,text="PRELIMINARY: This heat pump analysis tool is a prototype which has been adaptated\n"+
-        "from the Tufts ME145 Spring 2015 project by J.Kadako et al.\n"+
-        "It has limited applicability and needs to be extended to be useful\n"+
-        "Use at your own risk",font=NORM_FONT)        
+        label=ttk.Label(self,text="NOTICE: This heat pump analysis tool is for evaluating the utility and economics for Cold Climate Heat\n"+    
+        "Pumps as an alternative for residential heating in place of fuel oil, electric resistance and natural gas, and also hot water.\n"+
+        "The original version was adaptated from the Tufts ME145 Spring 2015 project by J.Kadako et al.\n"+
+        "Results are not guaranteed, and only as good as the data and assumptions going into it.  Use at your own risk",font=NORM_FONT)        
         label.pack(pady=10,padx=10)
 
         label2=ttk.Label(self,text="Copyright 2015, Town of Concord Comprehensive Sustainable Energy Committee",font=SMALL_FONT)        
@@ -1255,7 +1315,7 @@ class HomePage(tk.Frame) :
         statusBar.pack(side=BOTTOM, fill=X)
 
         ys = 5
-        text1=tk.Text(self,font=SMALL_FONT, height=30, width=160)
+        text1=tk.Text(self,font=SMALL_FONT, height=30, width=150)
         text1.insert(END,"\nResults:\n")
         button1 = ttk.Button(self,width=26,text="Baseline Heating Scenario",
                     command = lambda: controller.show_frame(BaselineHeatingPage))
@@ -1281,7 +1341,7 @@ class HomePage(tk.Frame) :
                     command = lambda: controller.show_frame(GraphPage))
         button5.pack(pady=ys)
         
-        button6 = ttk.Button(self,width=26,text="Forward Economics",
+        button6 = ttk.Button(self,width=26,text="Economics",
                     command = lambda: controller.show_frame(EconomicsPage))
         button6.pack(pady=ys)
         
@@ -1446,7 +1506,7 @@ class BaselineHeatingPage(tk.Frame):
         label.grid(row=0,column=2,columnspan=3,pady=10,padx=10)
   
         label1=ttk.Label(self,text="Baseline heating system type, efficiency, and operating parameters",font=NORM_FONT)
-        label1.grid(row=1,column=2,columnspan=3,pady=30,padx=10)
+        label1.grid(row=1,column=2,columnspan=3,pady=20,padx=10)
         
         BLType = IntVar()
         BLType.set(0)
@@ -1537,29 +1597,17 @@ class BaselineHeatingPage(tk.Frame):
         label3.grid(row=3,column=4,columnspan=2,padx=10, pady = ys)
             
         labelT = ttk.Label(self,text=str(WinterBLSetPoint))
-        button2a = ttk.Button(self,text="Temperature",width=20, 
+        button2a = ttk.Button(self,text="Temperature",width=15, 
                     command = lambda: setTempSetPoint(labelT))
         button2a.grid(row=4,column=4, pady = ys)
         labelT.grid(row=4,column=5, pady = ys)
+        labelTs = ttk.Label(self,text="deg F")
+        labelTs.grid(row=4,column=6, pady = ys)
 
         
         labelW=ttk.Label(self,text="Baseline hot water type parameters",font=NORM_FONT)
-        labelW.grid(row=10,column=2,columnspan=3,pady=30,padx=10)
+        labelW.grid(row=10,column=2,columnspan=2,pady=20,padx=10)
 
-        BLWType = IntVar()
-        BLWType.set(0)
-        rbw1 = tk.Radiobutton(self, width=16, text=HEAT_NAME_OIL, variable=BLWType, value=0, command=lambda: SetBLWScenario(HEAT_TYPE_OIL))
-        rbw2 = tk.Radiobutton(self, width=16, text=HEAT_NAME_GAS, variable=BLWType, value=1, command=lambda: SetBLWScenario(HEAT_TYPE_GAS))
-        rbw3 = tk.Radiobutton(self, width=16, text=HEAT_NAME_ELEC,variable=BLWType, value=2, command=lambda: SetBLWScenario(HEAT_TYPE_ELEC))
-        rbw4 = tk.Radiobutton(self, width=16, text=HEAT_NAME_LPG, variable=BLWType, value=3, command=lambda: SetBLWScenario(HEAT_TYPE_LPG))
-        rbw5 = tk.Radiobutton(self, width=16, text="Other",       variable=BLWType, value=4, command=lambda: SetBLWScenario(HEAT_TYPE_OTHER))
-        rbw1.grid(row=12,column=0,padx=20, pady = ys)
-        rbw2.grid(row=13,column=0,padx=20, pady = ys)
-        rbw3.grid(row=14,column=0,padx=20, pady = ys)
-        rbw4.grid(row=15,column=0,padx=20, pady = ys)
-        rbw5.grid(row=16,column=0,padx=20, pady = ys)
-        rbw1.invoke()
-         
         def getWaterUse(e):
             global WaterHeatMonthlyUsage
             s = GetFloat("Estimate monthly heat units for water", default=WaterHeatMonthlyUsage, min=0.)
@@ -1572,7 +1620,7 @@ class BaselineHeatingPage(tk.Frame):
             e.config(text=weff)
             e.update()
 
-        btnTxt = "Estimated monthly "+BaseEnergyUnits
+        btnTxt = "Estimated monthly " + WaterEnergyUnits
 
         weff = '{0:.0f}'.format(WaterHeatMonthlyUsage)
         ew = ttk.Label(self, width=5, text=weff)
@@ -1580,8 +1628,91 @@ class BaselineHeatingPage(tk.Frame):
         btn1 =ttk.Button(self,text=btnTxt, width=20, command=lambda: getWaterUse(ew))
         btn1.grid(row=12,column=2)
 
+        BLWType = IntVar()
+        BLWType.set(0)
+        rbw1 = tk.Radiobutton(self, width=16, text=HEAT_NAME_OIL, variable=BLWType, value=0, 
+        command=lambda: SetBLWScenario(HEAT_TYPE_OIL,btn1,ew))
+        rbw2 = tk.Radiobutton(self, width=16, text=HEAT_NAME_GAS, variable=BLWType, value=1, 
+        command=lambda: SetBLWScenario(HEAT_TYPE_GAS,btn1,ew))
+        rbw3 = tk.Radiobutton(self, width=16, text=HEAT_NAME_ELEC,variable=BLWType, value=2, 
+        command=lambda: SetBLWScenario(HEAT_TYPE_ELEC,btn1,ew))
+        rbw4 = tk.Radiobutton(self, width=16, text=HEAT_NAME_LPG, variable=BLWType, value=3, 
+        command=lambda: SetBLWScenario(HEAT_TYPE_LPG,btn1,ew))
+        rbw1.grid(row=12,column=0,padx=20, pady = ys)
+        rbw2.grid(row=13,column=0,padx=20, pady = ys)
+        rbw3.grid(row=14,column=0,padx=20, pady = ys)
+        rbw4.grid(row=15,column=0,padx=20, pady = ys)
+        rbw1.invoke()
+
+        labelW=ttk.Label(self,text="Standard unit prices",font=NORM_FONT)
+        labelW.grid(row=10,column=4,columnspan=3,pady=20,padx=10)
+
+        def setStandardPrice(fuel, e):
+            global STANDARD_PRICE_OIL,STANDARD_PRICE_GAS,STANDARD_PRICE_ELEC,STANDARD_PRICE_LPG
+            if fuel==0:
+                standardPrice = STANDARD_PRICE_OIL
+            elif fuel==1:
+                standardPrice = STANDARD_PRICE_GAS
+            elif fuel==2:
+                standardPrice = STANDARD_PRICE_ELEC
+            elif fuel==3:
+                standardPrice = STANDARD_PRICE_LPG
+            s = GetFloat("Standard price per unit (w/o $ sign)", default=standardPrice)
+            weff = s.result
+            try:
+                standardPrice = float(weff)
+                if fuel==0:
+                    STANDARD_PRICE_OIL = standardPrice
+                elif fuel==1:
+                    STANDARD_PRICE_GAS = standardPrice
+                elif fuel==2:
+                    STANDARD_PRICE_ELEC = standardPrice
+                elif fuel==3:
+                    STANDARD_PRICE_LPG = standardPrice
+            except:
+                print("bad value")
+
+            e.config(text=weff)
+            e.update()
+              
+            
+            
+            
+
+        p0 = "$%.2f" % STANDARD_PRICE_OIL
+        p1 = "$%.3f" % STANDARD_PRICE_GAS
+        p2 = "$%.3f" % STANDARD_PRICE_ELEC
+        p3 = "$%.2f" % STANDARD_PRICE_LPG
+        en0 = ttk.Label(self,text=p0,width=6)
+        en0.grid(row=12,column=5, pady = ys)
+        en1 = ttk.Label(self,text=p1,width=6)
+        en1.grid(row=13,column=5, pady = ys)
+        en2 = ttk.Label(self,text=p2,width=6)
+        en2.grid(row=14,column=5, pady = ys)
+        en3 = ttk.Label(self,text=p3,width=6)
+        en3.grid(row=15,column=5, pady = ys)
+
+        bt0 = ttk.Button(self,text=HEAT_NAME_OIL, width=15, command = lambda: setStandardPrice(0,en0))
+        bt0.grid(row=12,column=4, pady = ys)
+        bt1 = ttk.Button(self,text=HEAT_NAME_GAS, width=15, command = lambda: setStandardPrice(1,en1))
+        bt1.grid(row=13,column=4, pady = ys)
+        bt2 = ttk.Button(self,text=HEAT_NAME_ELEC,width=15, command = lambda: setStandardPrice(2,en2))
+        bt2.grid(row=14,column=4, pady = ys)
+        bt3 = ttk.Button(self,text=HEAT_NAME_LPG, width=15, command = lambda: setStandardPrice(3,en3))
+        bt3.grid(row=15,column=4, pady = ys)
+
+        eu0 = ttk.Label(self,text="per "+UNITS_OIL,width=10)
+        eu0.grid(row=12,column=6, pady = ys)
+        eu1 = ttk.Label(self,text="per "+UNITS_GAS,width=10)
+        eu1.grid(row=13,column=6, pady = ys)
+        eu2 = ttk.Label(self,text="per "+UNITS_ELEC,width=10)
+        eu2.grid(row=14,column=6, pady = ys)
+        eu3 = ttk.Label(self,text="per "+UNITS_LPG,width=10)
+        eu3.grid(row=15,column=6, pady = ys)
+         
+
         labelAC=ttk.Label(self,text="Baseline air conditioning parameters",font=NORM_FONT)
-        labelAC.grid(row=20,column=2,columnspan=3,pady=30,padx=10)
+        labelAC.grid(row=20,column=2,columnspan=3,pady=20,padx=10)
 
         BLAType = IntVar()
         BLAType.set(0)
@@ -1619,10 +1750,12 @@ class BaselineHeatingPage(tk.Frame):
         label3A.grid(row=22,column=4,columnspan=2,padx=10, pady = ys)
             
         labelAT = ttk.Label(self,text=str(SummerBLSetPoint))
-        buttonA2a = ttk.Button(self,text="Temperature",width=20, 
+        buttonA2a = ttk.Button(self,text="Temperature",width=15, 
                     command = lambda: setACSetPoint(labelAT))
         buttonA2a.grid(row=23,column=4, pady = ys)
         labelAT.grid(row=23,column=5, pady = ys)
+        labelTd = ttk.Label(self,text="deg F")
+        labelTd.grid(row=23,column=6, pady = ys)
 
         button4 = ttk.Button(self,text="Done",width=20, 
                     command = lambda: controller.show_frame(HomePage))
@@ -1912,39 +2045,429 @@ class GraphPage(tk.Frame):
         toolbar.update()
         canvas._tkcanvas.pack(side=tk.TOP,fill=tk.BOTH,expand=True)
 
+        
 class EconomicsPage(tk.Frame):
+    def UpdatePaybackData(self):
+        global AlternativeReplacementCost, AlternativeReplacementYears
+        global ElectricInflationRate, BaseInflationRate, SuppInflationRate
+        global BaseAverageUnits,HeatPumpAverageUnits,SuppAverageUnits
+        
+        textPD = "  Year\tH.P.\tB.L.\tDelta\tH.P. CO2\tB.L. CO2\n"
+        InitialCost = self.equipmentCost + self.installCost - self.rebate - self.financing
+        HeatPumpCost = InitialCost
+        AlternativeCost = 0
+        
+        ElectricRate = STANDARD_PRICE_ELEC
+        BaseRate = BaseCostPerUnit
+        WaterRate = WaterCostPerUnit
+        SuppRate = SuppCostPerUnit
+        HPEmissions = 0
+        AlternativeEmissions = 0.
+
+        BLAC = BaselineAC != 0 and SummerBLSetPoint> 0
+        HPAC = SummerHPSetPoint>0
+
+        Years = []
+        HeatPumpCostByYear = []
+        AlternativeCostByYear = []
+        DeltaByYear = []    
+        for i in range(20):
+
+            if i==1:
+                HeatPumpCost -= self.taxCredits
+                
+            if i==AlternativeReplacementYears:
+                AlternativeCost += AlternativeReplacementCost
+
+            Years.append(i)
+            HeatPumpFinancingCost = 0.
+            if i<self.financingYears:
+                HeatPumpFinancingCost = 12.*self.financingPayment
+                
+            HeatPumpAverageUnits = 0.
+            BaseAverageUnits=0.
+            HeatPumpOperatingCost = 0.
+            AlternativeOperatingCost = 0.
+            SupplementalOperatingCost = 0.
+            
+            if len(HPChoice)>0:
+                HeatPumpOperatingCost += HeatPumpAverageUnits*ElectricRate
+                AlternativeOperatingCost = BaseAverageUnits*BaseRate
+                if BLAC:
+                    AlternativeOperatingCost += BLACAverageUnits*ElectricRate
+                SupplementalOperatingCost = SuppAverageUnits*SuppRate
+
+                HPEmissions = HeatPumpAverageUnits*ElecKgCO2PerUnit*.001
+                AlternativeEmissions += BaseAverageUnits*BaseKgCO2PerUnit*.001
+
+            if HPWaterHeaterCOP>0:
+                # hot water only
+                HeatPumpWaterUnits = 12*WaterHeatMonthlyUsage*(WaterHeatEfficiency*WaterEnergyContent/ENERGY_CONTENT_ELEC)/HPWaterHeaterCOP
+                WaterAverageUnits = 12*WaterHeatMonthlyUsage
+                AlternativeOperatingCost += WaterAverageUnits*WaterRate
+                HeatPumpOperatingCost += HeatPumpWaterUnits*ElectricRate
+                
+                HPEmissions += HeatPumpWaterUnits*ElecKgCO2PerUnit*.001
+                AlternativeEmissions += WaterAverageUnits*WaterKgCO2PerUnit*.001
+                
+            if BLAC:
+                AlternativeEmissions += BLACAverageUnits*ElecKgCO2PerUnit*.001
+            
+            HeatPumpCost += HeatPumpOperatingCost + SupplementalOperatingCost + HeatPumpFinancingCost
+            AlternativeCost += AlternativeOperatingCost
+
+            HeatPumpCostByYear.append(HeatPumpCost)
+            AlternativeCostByYear.append(AlternativeCost)
+            Delta = HeatPumpCost - AlternativeCost
+            DeltaByYear.append(Delta)
+            textline = "   %d\t$%.0f\t$%.0f\t$%.0f\t%.2f T\t%.2f T\n" % (i,HeatPumpCost,AlternativeCost,Delta,HPEmissions, AlternativeEmissions)
+            textPD += textline
+            
+            ElectricRate *= (1.+ElectricInflationRate)
+            BaseRate *= (1.+BaseInflationRate)
+            SuppRate *= (1.+SuppInflationRate)
+            
+            if WaterHeatType == HEAT_NAME_ELEC:
+                WaterRate = ElectricRate
+            elif WaterHeatType==BaseHeatType:
+                WaterRate = BaseRate
+            
+        self.textPaybackData.config(text=textPD)
+        self.textPaybackData.update()
+        
+        a4.clear()
+        a4.plot(Years,HeatPumpCostByYear, "g", label = "Heat Pump Cost")
+        a4.plot(Years,AlternativeCostByYear, "r", label = "Alternative System Cost")
+    
+        a4.legend(bbox_to_anchor=(0,0.92,1,.102),loc=3, ncol=4, borderaxespad=0)
+        
+        title = "Economic Analysis"
+        a4.set_title(title)
+        f4.canvas.draw()
+        
+    def tkraise(self):
+
+        hpNames = ""
+        for hp in HPChoice :
+            hpNames += hp.Manufacturer+'-'+hp.OutdoorUnit+"-"+hp.IndoorUnits+","
+            self.elabel.config(text=hpNames)
+            self.elabel.update()
+        
+        if HPWaterHeaterCOP>0:
+            waterHeater = "Heat Pump Water Heater, COP=%.1f" % (HPWaterHeaterCOP)
+            self.labelw.config(text=waterHeater)
+            self.labelw.update()
+            
+        updateValues = True    
+        if updateValues:
+            ett = "$%.3f" % STANDARD_PRICE_ELEC
+            self.efc.config(text = ett)
+            self.efc.update()
+
+        self.UpdatePaybackData()
+        
+        tk.Frame.tkraise(self)
+        
+
     def __init__(self,parent,controller):
+        global AlternativeReplacementCost, AlternativeReplacementYears
+        global ElectricInflationRate, BaseInflationRate, SuppInflationRate
         tk.Frame.__init__(self,parent)
         
         label=ttk.Label(self,text="Economic Payback Calculation",font=LARGE_FONT)        
         label.grid(row = 0, column = 2, columnspan=2, pady=10,padx=10)
 
-        button1 = ttk.Button(self,text="Equipment Cost",width=16,
-                    command = lambda: controller.show_frame(HomePage))
-        button1.grid(row=1, column=0)
-
-        button2 = ttk.Button(self,text="Installation Cost",width=16,
-                    command = lambda: controller.show_frame(HomePage))
-        button2.grid(row=2, column=0)
+        label1 = ttk.Label(self,text="Equipment:",font=NORM_FONT)        
+        label1.grid(row = 1, column = 0, columnspan=2, pady=10,padx=10)
         
+        product = "" #manufacturer+" "+outdoorUnit+"-"+indoorUnit
+        self.elabel=ttk.Label(self,text=product,font=NORM_FONT,width=50)
+        self.elabel.grid(row = 2, column = 0,columnspan=3)
+            
+        self.labelw = ttk.Label(self,text="",font=NORM_FONT, width=50)
+        self.labelw.grid(row=3, column=0, columnspan=3)
+
+        def setEquipmentCost(e):
+            s = GetFloat("Equipment cost in $", default=self.equipmentCost)
+            eff = s.result
+            try:
+                self.equipmentCost = float(eff)
+                ect = "$%.0f" % self.equipmentCost
+                e.config(text=ect)
+                e.update()
+                self.UpdatePaybackData()
+            except:
+                print("bad value")
+        
+        self.equipmentCost = 0.0
+        tc = "$%.0f" % (self.equipmentCost)
+        lbltc = ttk.Label(self,text=tc)
+        lbltc.grid(row=6, column=1)
+        button1 = ttk.Button(self,text="Equipment Total Cost",width=16,
+                    command = lambda: setEquipmentCost(lbltc))
+        button1.grid(row=6, column=0)
+        
+        def setInstallCost(e):
+            s = GetFloat("Enter installation cost in $", default=self.installCost)
+            eff = s.result
+            try:
+                self.installCost = float(eff)
+                eit = "$%.0f" % self.installCost
+                e.config(text=eit)
+                e.update()
+                self.UpdatePaybackData()
+            except:
+                print("bad value")
+
+        self.installCost = 0.0
+        ic = "$%.0f" % (self.installCost)
+        lblic = ttk.Label(self,text=ic)
+        lblic.grid(row=7, column=1)
+        button2 = ttk.Button(self,text="Installation Cost",width=16,
+                    command = lambda: setInstallCost(lblic))
+        button2.grid(row=7, column=0)
+
+        def setRebate(e):
+            s = GetFloat("Enter rebate in $", default=self.rebate)
+            eff = s.result
+            try:
+                self.rebate = float(eff)
+                ert = "$%.0f" % self.rebate
+                e.config(text=ert)
+                e.update()
+                self.UpdatePaybackData()
+            except:
+                print("bad value")
+        
+        self.rebate = 0.0
+        rc = "($%.0f)" % (self.rebate)
+        lblrc = ttk.Label(self,text=rc)
+        lblrc.grid(row=8, column=1)
         button3 = ttk.Button(self,text="Rebate incentives",width=16,
-                    command = lambda: controller.show_frame(HomePage))
-        button3.grid(row=3, column=0)
+                    command = lambda: setRebate(lblrc))
+        button3.grid(row=8, column=0)
 
+        def setTI(e):
+            s = GetFloat("Enter tax credit in $", default=self.taxCredits)
+            eff = s.result
+            try:
+                self.taxCredits = float(eff)
+                ett = "$%.0f" % self.taxCredits
+                e.config(text=ett)
+                e.update()
+                self.UpdatePaybackData()
+            except:
+                print("bad value")
+
+        self.taxCredits = 0.0
+        ti = "($%.0f)" % (self.taxCredits)
+        lblti = ttk.Label(self,text=ti)
+        lblti.grid(row=9, column=1)
         button4 = ttk.Button(self,text="Tax incentives",width=16,
-                    command = lambda: controller.show_frame(HomePage))
-        button4.grid(row=4, column=0)
+                    command = lambda: setTI(lblti))
+        button4.grid(row=9, column=0)
 
-        text1 = ttk.Label(self,text='',width=60, font=NORM_FONT)
-        text1.grid(row=8,column=0,columnspan=3,sticky=(N,E,W))
+        def setFI(c,i,y,p):
+            s = GetFloat("Enter anount to be financed in $", default=self.financing)
+            self.financing = float(s.result)
+            ct = "Amount: $%.0f" % (self.financing)
+            c.config(text=ct)
+            c.update()
+            s = GetFloat("Enter interest rate in %", default=100.*self.financingInterest)
+            self.financingInterest = 0.01*float(s.result)
+            it = "Interest rate: %.0f%%" % (self.financingInterest*100.)
+            i.config(text=it)
+            i.update()
+            s = GetFloat("Enter payment period in years", default=self.financingYears)
+            self.financingYears = float(s.result)
+            yt = "paid over %.0f years" % (self.financingYears)
+            y.config(text=yt)
+            y.update()
+            if self.financingInterest==0.:
+                self.financingPayment = self.financing/self.financingYears/12
+            else:
+                interest = self.financingInterest/12.
+                self.financingPayment = self.financing*(interest/(1.-pow((1.+interest),-12*self.financingYears) ))
+            pt = "Monthly payment: $%.2f" % (self.financingPayment)
+            p.config(text=pt)
+            p.update()
+            self.UpdatePaybackData()
+            
+        self.financing = 0.0
+        fat = "Amount: $%.0f" % (self.financing)
+        lblfc = ttk.Label(self,text=fat)
+        lblfc.grid(row=10, column=1)
+        self.financingInterest = 0.05
+        fit = "Interest rate: %.3f%%" % (100.*self.financingInterest)
+        lblfi = ttk.Label(self,text=fit)
+        lblfi.grid(row=10, column=2)
+        self.financingYears = 10
+        fyt = "paid over %d years" % (self.financingYears)
+        lblfy = ttk.Label(self,text=fyt)
+        lblfy.grid(row=10, column=3)
+        self.financingPayment = 0.0
+        mpt = "Monthly payment: $%.2f" % (self.financingPayment)
+        lblfp = ttk.Label(self,text=mpt)
+        lblfp.grid(row=10, column=4)
+       
+        button5 = ttk.Button(self,text="Financing",width=16,
+                    command = lambda: setFI(lblfc,lblfi,lblfy,lblfp))
+        button5.grid(row=10, column=0)
 
+
+
+
+        textec = ttk.Label(self,text='Energy Costs:', font=NORM_FONT)
+        textec.grid(row=1,column=3)
+
+        def setEFC(c,y):
+            global STANDARD_PRICE_ELEC, ElectricInflationRate
+            try:
+                s = GetFloat("Electricity Price in $", default=STANDARD_PRICE_ELEC)
+                eff = s.result
+                STANDARD_PRICE_ELEC = float(eff)
+                ett = "$%.3f" % STANDARD_PRICE_ELEC
+                c.config(text=ett)
+                c.update()
+                
+                s = GetFloat("Inflation rate in %", default=100*ElectricInflationRate)
+                eff = s.result
+                ElectricInflationRate = 0.01*float(eff)
+                ett = "Inflation: %.1f%%" % (100*ElectricInflationRate)
+                y.config(text=ett)
+                y.update()
+                self.UpdatePaybackData()
+            except:
+                print("bad value")
+
+        efct = "$%.3f" % STANDARD_PRICE_ELEC
+        self.efc = ttk.Label(self,text=efct,width=6)
+        efit = "Inflation: %.1f%%" % (100.*ElectricInflationRate)
+        efi = ttk.Label(self,text=efit,width=12)
+        buttonE = ttk.Button(self,text="Electricity price",width=16,
+                    command = lambda: setEFC(self.efc,efi))
+        buttonE.grid(row=2, column=3)
+        self.efc.grid(row=2, column=4)
+        efi.grid(row=2, column=5)
+
+        def setBFC(c,y):
+            global BaseCostPerUnit, BaseInflationRate
+            try:
+                s = GetFloat("Unit price in $", default=BaseCostPerUnit)
+                eff = s.result
+                BaseCostPerUnit = float(eff)
+                ett = "$%.3f" % (BaseCostPerUnit)
+                c.config(text=ett)
+                c.update()
+                self.UpdatePaybackData()
+
+                s = GetFloat("Inflation rate in %", default=100*BaseInflationRate)
+                eff = s.result
+                BaseInflationRate = float(eff)/100.
+                ett = "Inflation: %.1f%%" % (100.*BaseInflationRate)
+                y.config(text=ett)
+                y.update()
+                self.UpdatePaybackData()
+            except:
+                print("bad value")
+
+        if BaseCostPerUnit<1.0 :
+            bfct = "$%.3f" % BaseCostPerUnit
+        else:
+            bfct = "$%.2f" % BaseCostPerUnit
+        self.bfc = ttk.Label(self,text=bfct,width=6)
+        bfit = "Inflation: %.1f%%" % (100.*BaseInflationRate)
+        bfi = ttk.Label(self,text=efit,width=12)
+        baseFuel = BaseHeatType+" price"
+        buttonB = ttk.Button(self,text=baseFuel,width=16,
+                    command = lambda: setBFC(self.bfc,bfi))
+        buttonB.grid(row=3, column=3)
+        self.bfc.grid(row=3, column=4)
+        bfi.grid(row=3, column=5)
+
+        def setSFC(c,y):
+            global SuppCostPerUnit, SuppInflationRate
+            try:
+                s = GetFloat("Supplemental unit cost in $", default=SuppCostPerUnit)
+                eff = s.result
+                SuppCostPerUnit = float(eff)
+                ett = "$%.3f" % SuppCostPerUnit
+                c.config(text=ett)
+                c.update()
+                self.UpdatePaybackData()
+
+                s = GetFloat("Inflation Rate in %", default=100*SuppInflationRate)
+                eff = s.result
+                SuppInflationRate = float(eff)/100.
+                ett = "Inflation: %.1f%%" % (100.*SuppInflationRate)
+                y.config(text=ett)
+                y.update()
+                self.UpdatePaybackData()
+            except:
+                print("bad value")
+
+        if SuppHeatType!=BaseHeatType and SuppHeatType!=HEAT_NAME_ELEC:
+            if SuppCostPerUnit<1.0 :
+                sfct = "$%.3f" % SuppCostPerUnit
+            else:
+                sfct = "$%.2f" % SuppCostPerUnit
+            self.sfc = ttk.Label(self,text=sfct,width=6)
+            sfit = "Inflation: %.1f%%" % (100.*SuppInflationRate)
+            sfi = ttk.Label(self,text=efit,width=12)
+            suppFuel = SuppHeatType+" price"
+            buttonS = ttk.Button(self,text=suppFuel,width=16,
+                    command = lambda: setSFC(self.sfc,sfi))
+            buttonS.grid(row=4, column=3)
+            self.sfc.grid(row=4, column=4)
+            sfi.grid(row=4, column=5)
+
+        textec = ttk.Label(self,text='Alternative System:', font=NORM_FONT)
+        textec.grid(row=7,column=3)
+
+        def setASC(c,y):
+            global AlternativeReplacementCost,AlternativeReplacementYears
+            try:
+                s = GetFloat("Alternative system cost in $", default=AlternativeReplacementCost)
+                eff = s.result
+                AlternativeReplacementCost = float(eff)
+                ett = "$%.0f" % (AlternativeReplacementCost)
+                c.config(text=ett)
+                c.update()
+
+                s = GetFloat("Replacement time in years", default=AlternativeReplacementYears)
+                eff = s.result
+                AlternativeReplacementYears = float(eff)
+                ett = "spent in %.0f years" % (AlternativeReplacementYears)
+                y.config(text=ett)
+                y.update()
+                self.UpdatePaybackData()
+            except:
+                print("bad value")
+
+        asct = "$%.0f" % (AlternativeReplacementCost)
+        asc = ttk.Label(self,text=asct,width=6)
+        asyt = "spent in %.0f years" % (AlternativeReplacementYears)
+        asy = ttk.Label(self,text=asyt,width=12)
+        buttonAS = ttk.Button(self,text="Alternative cost",width=16,
+                    command = lambda: setASC(asc,asy))
+        buttonAS.grid(row=8, column=3)
+        asc.grid(row=8, column=4)
+        asy.grid(row=8, column=5)
+
+
+
+        self.textPaybackData = ttk.Label(self,text='',width=60, font=NORM_FONT)
+        self.textPaybackData.grid(row=20,rowspan=2,column=0,columnspan=3, pady=10)
+
+        self.UpdatePaybackData()
+        
         canvas = FigureCanvasTkAgg(f4,self)
         canvas.show()
-        canvas.get_tk_widget().grid(column=3, columnspan=3, row=8)  #fill=tk.BOTH,,pady=10
+        canvas.get_tk_widget().grid(column=3, columnspan=3, row=20)  #fill=tk.BOTH,,pady=10
         
         button10 = ttk.Button(self,text="Done",
                     command = lambda: controller.show_frame(HomePage))
-        button10.grid(row=10, column=2)
+        button10.grid(row=0, column=4)
         
 def isHeating(t) :
 # Author: Jonah Kadoko
@@ -2038,13 +2561,9 @@ def approxResistance():
     endYear = t_Data[t_End].year
     BaseUnitsByYear.clear()
     BaseCostByYear.clear()
-    BLAC_KWhByYear.clear()
-    HPAC_KWhByYear.clear()
     for year in range(startYear,endYear+1):
         BaseUnitsByYear.append(0.0)
         BaseCostByYear.append(0.0)
-        BLAC_KWhByYear.append(0.0)
-        HPAC_KWhByYear.append(0.0)
 
     # Calculate total annual delta T
     delta_T = 0.0
@@ -2128,6 +2647,8 @@ def heatPumpPerformance(h):
     p = 0
     
     KWhByYear.clear()
+    HPAC_KWhByYear.clear()
+    BLAC_KWhByYear.clear()
     SuppUnitsByYear.clear()
     SuppUsesByYear.clear()
 
@@ -2144,6 +2665,7 @@ def heatPumpPerformance(h):
         supplemental_Heat = [0.0 for t in range(t_Start,t_End)]
         COP_Ave = [0.0 for t in range(t_Start,t_End)]
     else:
+
         startYear = endYear = h
         t_Start = 0
         t_End = len(t_Data)
@@ -2181,7 +2703,9 @@ def heatPumpPerformance(h):
             KWhByYear.append(0.0)
             SuppUnitsByYear.append(0.0)
             SuppUsesByYear.append(0)
-            
+            BLAC_KWhByYear.append(0.0)
+            HPAC_KWhByYear.append(0.0)
+           
         # Calculate the perfomance
         if (use_Average_R) : 
             resistance = average_Resistance            
@@ -2243,7 +2767,7 @@ def heatPumpPerformance(h):
             BaseCostByYear[Y] += BaseCostPerUnit*heating_required/BaseHvacEfficiency/BaseEnergyContent
         
         # Note times where the heat pump cannot meet demand
-        if (temp<SuppOutdoorTempNABL):
+        if len(HPChoice)==0 or temp<SuppOutdoorTempNABL:
 
             supplemental_required = heating_required
             
@@ -2302,10 +2826,10 @@ def heatPumpPerformance(h):
             if h==0:
                 electric_Required[ti] = electric_required
                 
-        if (cooling_required > 0) :
-            if BaselineAC != 0 and BaselineSEER>0:
-                BLAC_KWhByYear[Y] += cooling_required / BaselineSEER/1000.
+        if BaselineAC != 0 and BaselineSEER>0:
+            BLAC_KWhByYear[Y] += cooling_required / BaselineSEER/1000.
 
+        if len(HPChoice)>0 and cooling_required > 0 :
             # weighted average SEER based on fraction of total capacity at 47 degrees
             HPSEER = 0.
             CAPTOTAL = 0.
