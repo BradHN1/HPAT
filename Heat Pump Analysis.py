@@ -2097,7 +2097,7 @@ class EconomicsPage(tk.Frame):
                     AlternativeOperatingCost += BLACAverageUnits*ElectricRate
                 SupplementalOperatingCost = SuppAverageUnits*SuppRate
 
-                HPEmissions = HeatPumpAverageUnits*ElecKgCO2PerUnit*.001
+                HPEmissions += HeatPumpAverageUnits*ElecKgCO2PerUnit*.001
                 AlternativeEmissions += BaseAverageUnits*BaseKgCO2PerUnit*.001
 
             if HPWaterHeaterCOP>0:
