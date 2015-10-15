@@ -61,6 +61,7 @@ from HeatPump import *          # new heat pump class
 from datetime import datetime, date, time
 from pylab import *
 
+HUGE_FONT = ("Verdana",36)
 LARGE_FONT = ("Verdana",20)
 NORM_FONT = ("Helvetica",16)
 SMALL_FONT = ("Helvetica",13)
@@ -2084,8 +2085,8 @@ class EconomicsPage(tk.Frame):
             if i<self.financingYears:
                 HeatPumpFinancingCost = 12.*self.financingPayment
                 
-            HeatPumpAverageUnits = 0.
-            BaseAverageUnits=0.
+#           HeatPumpAverageUnits = 0.
+#           BaseAverageUnits=0.
             HeatPumpOperatingCost = 0.
             AlternativeOperatingCost = 0.
             SupplementalOperatingCost = 0.
