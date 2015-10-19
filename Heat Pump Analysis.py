@@ -723,6 +723,8 @@ def LoadTempDataRaw(status, year=0):
 
     if year==0:
         yearStart = purchase_Date[0].year
+        if yearStart<2002 :
+            yearStart = 2002
         yearEnd = purchase_Date[-1].year
     else:
         yearStart = yearEnd = year
@@ -1182,7 +1184,7 @@ def SaveDeliveriesDlg() :
     title="Select file to save fuel deliveries data" )
     if len(fname)>0:
         print("Saving delivery data to %s" % fname)
-        saveOilDeliveries(fname)
+        saveFuelDeliveries(fname)
 
 def UpdateDeliveryDataView(listbox):
     listbox.delete(0,END)
@@ -1451,7 +1453,7 @@ class FuelDeliveryPage(tk.Frame):
         button2.grid(row=8,column=1)
 
         button3 = ttk.Button(self,text="Save Delivery data",
-                    command = lambda: SaveDeliveriesDlg(self))
+                    command = lambda: SaveDeliveriesDlg)
         button3.grid(row=8,column=2)
 
         lbHdr = tk.Listbox(self,selectmode=tk.SINGLE,height=2,width=40)
