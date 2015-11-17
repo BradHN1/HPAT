@@ -673,7 +673,6 @@ def LoadTempDataRaw(status, year=0):
                     datestring = datestring[0:11]+"0"+datestring[11:]
                 dateTime = datetime.datetime.strptime(datestring[0:-4], "%m-%d-%Y %H:%M")
             except:     # hit the line past the date lines 
-                print ("4 exception " + str(sys.exc_info()))
                 break
 
             try:
