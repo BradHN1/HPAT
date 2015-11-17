@@ -672,7 +672,7 @@ def LoadTempDataRaw(status, year=0):
                 if datestring.find(':') == 12 :
                     datestring = datestring[0:11]+"0"+datestring[11:]
                 dateTime = datetime.datetime.strptime(datestring[0:-4], "%m-%d-%Y %H:%M")
-            except:     # hit the line past the date lines 
+            except:     # hit the line past the date lines
                 break
 
             try:
