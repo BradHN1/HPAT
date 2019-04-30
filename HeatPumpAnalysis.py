@@ -36,28 +36,34 @@
 #
 # to do:
 # dehumidifier usage
+import os
 
 from HeatPump import *          # new heat pump class
 
 from datetime import datetime, date, time
 from pylab import *
 
+#HEAT_PUMP_FILE_NAME = 'Cold Climate Air-Source Heat Pump Listing.txt'
+HEAT_PUMP_FILE_NAME = 'ColdClimateAir-SourceHeatPumpSpecificationListing-Updated 7.14.17_1.txt'
+
 # Heating system types
 
 HEAT_TYPE_OIL = 0
 EFFICIENCY_HVAC_OIL = 0.75
-ENERGY_CONTENT_OIL = 139000    # from http://www.engineeringtoolbox.com/energy-content-d_868.html
-KGCO2_PER_UNIT_OIL = 72.93*1e-6*ENERGY_CONTENT_OIL
+ENERGY_CONTENT_OIL = 139600    # from http://www.engineeringtoolbox.com/energy-content-d_868.html
+KGCO2_PER_UNIT_OIL = 73.96*1e-6*ENERGY_CONTENT_OIL
 
 HEAT_TYPE_GAS = 1
 EFFICIENCY_HVAC_GAS = 0.90
 ENERGY_CONTENT_GAS = 1050      # listed as 950-1150 from http://www.engineeringtoolbox.com/energy-content-d_868.html
-KGCO2_PER_UNIT_GAS = 53.06*1e-6*ENERGY_CONTENT_GAS      # http://www.epa.gov/climateleadership/documents/emission-factors.pdf
+# KGCO2_PER_UNIT_GAS = 53.06*1e-6*ENERGY_CONTENT_GAS      # http://www.epa.gov/climateleadership/documents/emission-factors.pdf
+KGCO2_PER_UNIT_GAS = (53.06+60)*1e-6*ENERGY_CONTENT_GAS      # http://www.epa.gov/climateleadership/documents/emission-factors.pdf - larger factor to account for methane leakage
 
 HEAT_TYPE_ELEC = 2
 EFFICIENCY_HVAC_ELEC = 0.75
 ENERGY_CONTENT_ELEC = 3412                              # from http://www.engineeringtoolbox.com/energy-content-d_868.html
 KGCO2_PER_UNIT_ELEC = (722/2.2)*1e-3
+#KGCO2_PER_UNIT_ELEC = (1.037/2.2)           # updated with EIA number for 2015 on Northeast power grid
 
 HEAT_TYPE_LPG = 3
 EFFICIENCY_HVAC_LPG = 0.75
@@ -68,7 +74,6 @@ HEAT_TYPE_OTHER = 4
 EFFICIENCY_HVAC_OTHER = 1.0
 ENERGY_CONTENT_OTHER = 1
 KGCO2_PER_UNIT_OTHER = 0
-
 
 class HeatPumpAnalysis :    
     """Data and methods for calculation of heat pump parameters"""
@@ -93,7 +98,7 @@ class HeatPumpAnalysis :
         self.STANDARD_PRICE_ELEC = 0.15
         self.STANDARD_PRICE_LPG = 3.105                              # average Ma LPG price 2015
 
-        # Baseline heating scenario - for which the usage data applies
+        # default Baseline heating scenario - for which the usage data applies
         self.BaseHeatType = self.HEAT_NAME_OIL
         self.BaseHvacEfficiency = EFFICIENCY_HVAC_OIL
         self.BaseEnergyContent = ENERGY_CONTENT_OIL     # from http://www.engineeringtoolbox.com/energy-content-d_868.html
@@ -102,7 +107,7 @@ class HeatPumpAnalysis :
         self.BaseCostPerUnit = self.STANDARD_PRICE_OIL
         self.BaseInflationRate = 0.05
 
-        # supplemental system - augments the HeatPump system to meet necessary capacity
+        # default Supplemental system - augments the HeatPump system to meet necessary capacity
         self.SuppHeatType = self.BaseHeatType
         self.SuppHvacEfficiency = self.BaseHvacEfficiency
         self.SuppEnergyContent = self.BaseEnergyContent     
@@ -193,10 +198,29 @@ class HeatPumpAnalysis :
         self.updateTemp = True
         self.updateResistance = True
 
-        workingDirectory = './Residential Profiles/'
-        # filename = 'FP Oil Deliveries.txt'
+        def find(name,path):
+            for root,dirs,files in os.walk(path):
+                if name in files:
+                    return os.path.join(root,name)
+        
+        # find the program directory
+        cwd = os.getcwd()
+        heatPumpFile = 'Cold Climate Air-Source Heat Pump Listing.txt'
+        heatPumpFileLoc = find(heatPumpFile,cwd)
+        if heatPumpFileLoc == None:
+            # look up one or two levels to find it
+            os.chdir('..')
+            cwd = os.getcwd()            
+            heatPumpFile = find(heatPumpFile,os.getcwd())
+            if heatPumpFileLoc== None:
+                os.chdir('..')
+                cwd = os.getcwd()            
+                heatPumpFileLoc = find('Cold Climate Air-Source Heat Pump Listing.txt',os.getcwd())
+        if heatPumpFileLoc:
+            self.workingDirectory = heatPumpFileLoc[0:heatPumpFileLoc.find(heatPumpFile)]
+            
         filename = 'Default Oil Deliveries.txt'
-        purchasesFile = workingDirectory + filename
+        purchasesFile = self.workingDirectory + 'Residential Profiles/' + filename
         self.numDeliveries = self.loadFuelDeliveries(purchasesFile)
     
     def SetBLScenario(self,BLT) :
@@ -249,7 +273,7 @@ class HeatPumpAnalysis :
         self.SuppCostPerUnit = self.BaseCostPerUnit
     
         self.updateResistance = True
-    
+
     def SetSuppHeat(self,BLT) :
         if BLT == HEAT_TYPE_OIL :    # oil
             self.SuppHeatType = self.HEAT_NAME_OIL
@@ -290,6 +314,7 @@ class HeatPumpAnalysis :
 
         self.updateResistance = True
 
+  
     def SetBLWScenario(self,BLT) :
         if BLT == HEAT_TYPE_OIL :    # oil
             self.WaterHeatType = self.HEAT_NAME_OIL
@@ -333,6 +358,36 @@ class HeatPumpAnalysis :
         elif BLA == 2 :    # central
             self.BaselineAC = 2
 
+    # update baseline and supplemental fuel prices to be those set by the Fuel Options menu
+    def UpdatePrices(self) :
+        
+        if self.BaseHeatType == self.HEAT_NAME_OIL :
+            self.BaseCostPerUnit = self.STANDARD_PRICE_OIL
+        elif self.BaseHeatType == self.HEAT_NAME_GAS : # natural gas
+            self.BaseCostPerUnit = self.STANDARD_PRICE_GAS
+        elif self.BaseHeatType == self.HEAT_NAME_ELEC : # electric
+            self.BaseCostPerUnit = self.STANDARD_PRICE_ELEC
+        elif self.BaseHeatType == self.HEAT_NAME_LPG : # propane
+            self.BaseCostPerUnit = self.STANDARD_PRICE_LPG
+
+        if self.SuppHeatType == self.HEAT_NAME_OIL :
+            self.SuppCostPerUnit = self.STANDARD_PRICE_OIL
+        elif self.SuppHeatType == self.HEAT_NAME_GAS : # natural gas
+            self.SuppCostPerUnit = self.STANDARD_PRICE_GAS
+        elif self.SuppHeatType == self.HEAT_NAME_ELEC : # electric
+            self.SuppCostPerUnit = self.STANDARD_PRICE_ELEC
+        elif self.SuppHeatType == self.HEAT_NAME_LPG : # propane
+            self.SuppCostPerUnit = self.STANDARD_PRICE_LPG
+
+        if self.WaterHeatType == self.HEAT_NAME_OIL :
+            self.WaterCostPerUnit = self.STANDARD_PRICE_OIL
+        elif self.WaterHeatType == self.HEAT_NAME_GAS : # natural gas
+            self.WaterCostPerUnit = self.STANDARD_PRICE_GAS
+        elif self.WaterHeatType == self.HEAT_NAME_ELEC : # electric
+            self.WaterCostPerUnit = self.STANDARD_PRICE_ELEC
+        elif self.WaterHeatType == self.HEAT_NAME_LPG : # propane
+            self.WaterCostPerUnit = self.STANDARD_PRICE_LPG
+
     def loadFuelDeliveries(self,purchasesFile):
 
         # this was take from previous code tested using First Parish oil purchases
@@ -349,8 +404,8 @@ class HeatPumpAnalysis :
             input = open(purchasesFile,'r', encoding='latin-1')
 
         except:
-            print("Unable to open input file")
-            return
+            print("Unable to open input file :"+purchasesFile)
+            return 0
         
         test = input.read()
         lines = test.split('\n')
@@ -393,8 +448,15 @@ class HeatPumpAnalysis :
                 tokens = lines[LN].split('\t')
             else:
                 break
-            if len(tokens)<3:
-                break           # or blank lines at end of file
+            if len(tokens)<4:
+                if LN<len(lines)-1:
+                #   probably an issue
+                    dbgMsg = 'Line %d (%s): # tokens = %d' % (LN,lines[LN],len(tokens))
+                    print(dbgMsg)
+                    LN += 1
+                    continue
+                else:
+                    break           # or blank lines at end of file
             
             LN += 1
     
@@ -515,39 +577,51 @@ class HeatPumpAnalysis :
 
     def loadHeatPumps(self):
 
+        def tF(stringvar):
+            if len(stringvar)==0:
+                return -1.0
+            if stringvar=="#DIV/0!":
+                return -99.0
+            return float((stringvar.replace(',','')).replace('"',''))
+            
         # read the heat pump data file
-        workingDirectory = './'
-        filename = 'Cold Climate Air-Source Heat Pump Listing.txt'
-        HeatPumpDataFile = workingDirectory + filename
+        filename = HEAT_PUMP_FILE_NAME
+        HeatPumpDataFile = self.workingDirectory + filename
         
         input = open(HeatPumpDataFile,'r', encoding='latin-1')
         test = input.read()
         lines = test.split('\n')
 
+        # Skip ahead to the line which starts "Manufacturer"
         LN = 0      # step through data starting at first line
-        tokens = lines[0].split('\t')
+        while True:
+            tokens = lines[LN].split('\t')
+            LN +=1
+            if (tokens[0]=='Manufacturer'):
+                break;
 
-        def tF(stringvar):
-            return float((stringvar.replace(',','')).replace('"',''))
-                 
         # ' Load Heat Pump Data
-        first = True
         while True:
             
             if (LN==len(lines)):
                 break
-            LN += 1
-            if LN<3:
-                continue;
                 
             tokens = lines[LN].split('\t') 
-            if tokens[0]=='': break               
-            if len(tokens)<50 : break
+            LN += 1
+                
+            if tokens[0]=='': 
+                break               
+            if len(tokens)<50 : 
+                continue
     
-            heatPump = HeatPump(Manufacturer=tokens[0], Brand=tokens[1], AHRICertNumber=tokens[2], OutdoorUnit=tokens[3],                
-                IndoorUnits=tokens[4],VariableSpeed=tokens[5],HSPFregIV=tokens[6],SEER=tokens[7],EER_95=tokens[8],EnergyStar=tokens[9],
-                DuctedDuctless=tokens[10],Zones=tokens[11])
+#           7/19/17 BHN:  Updated to ColdClimateAir=SourceHeatPumpSpecificationListing 7.14.17
+            heatPump = HeatPump(Manufacturer=tokens[0], Brand=tokens[1], ModelName=tokens[2],AHRICertNumber=tokens[3], OutdoorUnit=tokens[4],                
+                IndoorUnits=tokens[5],AHRIType=tokens[6],HSPFregIV=tokens[7],SEER=tokens[8],EER_95=tokens[9],CoolingCapacity=tokens[10],
+                EnergyStar=tokens[11],DuctedDuctless=tokens[12],Zones=tokens[13],DuctlessIndoorType=tokens[14])
     
+    
+            C1 = 16 # first column with data values, in the file from 7.14.17
+            C2 = 53 # the column with a third optional temperature value
             try:
                 # calculate linear parameters a and b from the NEEP data
                 tData = [47,17,5]
@@ -557,41 +631,42 @@ class HeatPumpAnalysis :
                 COPMin = []
                 COPRated = []
                 COPMax = []
-                CAPMin.append(tF(tokens[13]))
-                CAPMin.append(tF(tokens[23]))
-                CAPMin.append(tF(tokens[33]))
-#               CAPRated.append(tF(tokens[14]))
-#               CAPRated.append(tF(tokens[24]))
-#               CAPRated.append(tF(tokens[34]))
-                CAPMax.append(tF(tokens[15]))
-                CAPMax.append(tF(tokens[25]))
-                CAPMax.append(tF(tokens[35]))
+                CAPMin.append(tF(tokens[C1+ 0]))
+                CAPMin.append(tF(tokens[C1+10]))
+                CAPMin.append(tF(tokens[C1+20]))
+
+                CAPMax.append(tF(tokens[C1+ 2]))
+                CAPMax.append(tF(tokens[C1+12]))
+                CAPMax.append(tF(tokens[C1+22]))
             
-                COPMin.append(tF(tokens[19]))
-                COPMin.append(tF(tokens[29]))
-                COPMin.append(tF(tokens[39]))
-#               COPRated.append(tF(tokens[20]))
-#               COPRated.append(tF(tokens[30]))
-#               COPRated.append(tF(tokens[40]))
-                COPMax.append(tF(tokens[21]))
-                COPMax.append(tF(tokens[31]))
-                COPMax.append(tF(tokens[41]))
+                COPMin.append(tF(tokens[C1+ 6]))
+                COPMin.append(tF(tokens[C1+16]))
+                COPMin.append(tF(tokens[C1+26]))
+
+                COPMax.append(tF(tokens[C1+ 8]))
+                COPMax.append(tF(tokens[C1+18]))
+                COPMax.append(tF(tokens[C1+28]))
                 
-                if tokens[47] != 'N/A':
-                    tData.append(tF(tokens[47]))
-                    CAPMin.append(tF(tokens[48]))
-#                   CAPRated.append(tF(tokens[49]))
-                    CAPMax.append(tF(tokens[50]))
-                    COPMin.append(tF(tokens[54]))
-#                   COPRated.append(tF(tokens[55]))
-                    COPMax.append(tF(tokens[56]))
+                if (len(tokens[C2])>0) & (tokens[C2] != 'N/A'):
+                    tMin = tF(tokens[C2])
+                    tData.append(tMin)
+                    capMin = tF(tokens[C2+1])
+                    capMax = tF(tokens[C2+3])
+                    copMin = tF(tokens[C2+7])
+                    copMax = tF(tokens[C2+9])
+                    if capMin<0. :
+                        capMin = capMax
+                        copMin = copMax
+                        
+                    CAPMin.append(capMin)
+                    CAPMax.append(capMax)
+                    COPMin.append(copMin)
+                    COPMax.append(copMax)
             
                 heatPump.tData = tData
                 heatPump.CAPMin = CAPMin
- #              heatPump.CAPRated = CAPRated 
                 heatPump.CAPMax = CAPMax 
                 heatPump.COPMin = COPMin
- #              heatPump.COPRated = COPRated
                 heatPump.COPMax = COPMax
                    
 #               heatPump.parametrize()
@@ -618,7 +693,7 @@ class HeatPumpAnalysis :
         oneHour = datetime.timedelta(0,0,0,0,0,1,0)
     
         # loop over files from these years
-        ClimaticDataPath = './Climate Data/KBED'
+        ClimaticDataPath = self.workingDirectory + 'Climate Data/KBED'
         for year in range(yearStart,yearEnd+1):
             filename = "%s-%i.txt" % (ClimaticDataPath, year) 
             print("Reading "+filename)
@@ -715,7 +790,8 @@ class HeatPumpAnalysis :
             hpNames = ""
             n = 0
             for hp in self.HPChoice :
-                hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit
+#                hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit
+                hpNames += hp.Brand +'-' +hp.OutdoorUnit
                 n += 1
                 if n<len(self.HPChoice):
                     hpNames += "+"
@@ -814,7 +890,7 @@ class HeatPumpAnalysis :
 
         startYear = self.t_Data[self.t_Start].year
         endYear = self.t_Data[self.t_End].year
-        for year in range(startYear+1,endYear):     # first and last years tend to be truncated, with potentially misleading results
+        for year in range(startYear+1,endYear+1):     # first and last years tend to be truncated, with potentially misleading results
             Y = year-startYear
 
             resultline = "%d\t%.0f\t$%.0f\t" % (year,self.BaseUnitsByYear[Y],self.BaseCostByYear[Y])
@@ -829,7 +905,7 @@ class HeatPumpAnalysis :
                     waterCost = 0
                     print("WaterHeatType="+self.WaterHeatType)
                 resultline += "%.0f\t$%.0f\t" % (waterUsage,waterCost )  
-            if BLAC:
+            if BLAC and (len(self.HPChoice)>0):
                 resultline += "%.0f\t$%.0f\t" % (self.BLAC_KWhByYear[Y],self.BLAC_KWhByYear[Y]*self.STANDARD_PRICE_ELEC)
         
             resultline += " |  "
@@ -861,7 +937,7 @@ class HeatPumpAnalysis :
 
             if len(self.HPChoice)>0 or self.SuppHeatType!=self.BaseHeatType:
                 totSavings += self.BaseCostByYear[Y] - (self.KWhByYear[Y]*self.STANDARD_PRICE_ELEC + self.SuppUnitsByYear[Y]*self.SuppCostPerUnit) 
-            if BLAC or HPAC :
+            if len(self.HPChoice)>0 and (BLAC or HPAC) :
                 totSavings += (self.BLAC_KWhByYear[Y]-self.HPAC_KWhByYear[Y]) * self.STANDARD_PRICE_ELEC
             if self.HPWaterHeaterCOP>0:
                 totSavings += 12.*self.WaterHeatMonthlyUsage * self.WaterCostPerUnit - HPWaterUnits*self.STANDARD_PRICE_ELEC
@@ -871,7 +947,7 @@ class HeatPumpAnalysis :
             if len(self.HPChoice)>0 or self.SuppHeatType!=self.BaseHeatType:
                 totHPEmissions   += self.ElecKgCO2PerUnit*self.KWhByYear[Y]
                 totSuppEmissions += self.SuppKgCO2PerUnit*self.SuppUnitsByYear[Y]
-            if BLAC or HPAC:
+            if len(self.HPChoice)>0 and (BLAC or HPAC):
                 totBLACEmissions += self.BLAC_KWhByYear[Y]*self.ElecKgCO2PerUnit
                 totHPACEmissions += self.HPAC_KWhByYear[Y]*self.ElecKgCO2PerUnit
             totHPHWEmissions += HPWaterUnits*self.ElecKgCO2PerUnit
@@ -904,6 +980,9 @@ class HeatPumpAnalysis :
 
         analyzeExtremes = True
         if len(self.HPChoice)>0 and analyzeExtremes:
+            # BHN 7/20/17 - update prices for baseline and supplemental heat to be the standard price set from the Fuel Options page
+            self.UpdatePrices()
+
             for year in (AverageHDDYear, HighestHDDYear) :
             # average year first
                 self.LoadTempDataRaw(status,year)
@@ -920,6 +999,9 @@ class HeatPumpAnalysis :
                 totSavings = self.BaseCostByYear[0] - (self.KWhByYear[0]*self.STANDARD_PRICE_ELEC + self.SuppUnitsByYear[0]*self.SuppCostPerUnit) 
                 if BLAC or HPAC :
                     totSavings += (self.BLAC_KWhByYear[0]-self.HPAC_KWhByYear[0]) * self.STANDARD_PRICE_ELEC
+                # Bug fix: add hot water heater savings for average and coldest years
+                if self.HPWaterHeaterCOP>0:
+                    totSavings += 12.*self.WaterHeatMonthlyUsage * self.WaterCostPerUnit - HPWaterUnits*self.STANDARD_PRICE_ELEC
                 if totSavings>0 :
                     savingsImpact = "saved"
                 else:
@@ -1110,18 +1192,26 @@ class HeatPumpAnalysis :
             if self.isHeating(t) and (self.purchase_Date[p] <= thisDate) and (thisDate <= self.purchase_Date[p + 1]) and (p<self.last_Purchase):
 
                 # Sum app eligible delta_T during each heating period
-                self.approx_Resistance[p][1] += (self.WinterHPSetPoint - self.T_Outdoor[t]) / 
-                                                (self.BaseHvacEfficiency * Quantity_Used * self.BaseEnergyContent)
+                self.approx_Resistance[p][1] += (self.WinterHPSetPoint - self.T_Outdoor[t]) / (self.BaseHvacEfficiency * Quantity_Used * self.BaseEnergyContent)
             else:
                 if self.isHeating(t) and (self.purchase_Date[p + 1] <= thisDate) and (thisDate <= self.purchase_Date[self.last_Purchase]) and (p < self.last_Purchase): 
                 # this particular time sample belongs to the next purchase period
                     p = p + 1
                     self.approx_Resistance[p][0] = t
-                    self.approx_Resistance[p][1] =  (self.WinterHPSetPoint - self.T_Outdoor[t]) / 
-                                                    (self.BaseHvacEfficiency * Quantity_Used * self.BaseEnergyContent)
+                    self.approx_Resistance[p][1] =  (self.WinterHPSetPoint - self.T_Outdoor[t]) / (self.BaseHvacEfficiency * Quantity_Used * self.BaseEnergyContent)
  
     # Average resistance during the heating period
         self.average_Resistance = delta_T / (self.BaseHvacEfficiency * self.BaseEnergyContent * total_Vol)
+
+#        debugMessage = "Ave resistance = %f" % self.average_Resistance
+#        print(debugMessage)
+#        debugMessage = "delta_T = %f" % delta_T
+#        print(debugMessage)
+#        debugMessage = "BaseHVACEff = %f" % self.BaseHvacEfficiency
+#        print(debugMessage)
+#        debugMessage = "total_Vol = %f" % total_Vol
+#        print(debugMessage)
+        
 
     def heatPumpPerformance(self,h):
     #Author: Jonah Kadoko
@@ -1321,13 +1411,18 @@ class HeatPumpAnalysis :
                                     
     def outputData(self,results):
         # This routine outputs all results to a text file
-    
+
+        now = datetime.date.today()
+        now = now.isoformat()
+   
         hpNames = ""
         for hp in self.HPChoice :
-            hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit 
+            hpNames += hp.Brand +'-' +hp.OutdoorUnit 
+#            hpNames += hp.Manufacturer +'-' +hp.OutdoorUnit 
         
-        outputFile = './Output Data/Heat Pump Analysis.txt'
-        output = open(outputFile,'w')
+        outputFile = './Output Data/Heat Pump Analysis-'+now+'.txt'
+        #output = open(outputFile,'w')
+        output = open(outputFile,'a')
            
         output.write('Analysis for: '+hpNames +'\r')    
  

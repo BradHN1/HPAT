@@ -3,13 +3,15 @@ import tkSimpleDialog
 
 class CalendarDialog(tkSimpleDialog.Dialog):
     """Dialog box that displays a calendar and returns the selected date"""
-    def __init__(self, msg="Enter date", default="", year=None, month=None):
-        self.msg = msg
+#    def __init__(self, title="Enter date", default="", year=None, month=None):
+    def __init__(self, title="Enter date", default=None, year=None, month=None):
         self.year = year
         self.month = month
         self.default = default
+#       self.title = title
         
-        tkSimpleDialog.Dialog.__init__(self,parent=None,title=None)
+#       tkSimpleDialog.Dialog.__init__(self,parent=None,title=None)
+        tkSimpleDialog.Dialog.__init__(self,parent=None,title=title)
 
     def body(self, master):
         kwargs = {}

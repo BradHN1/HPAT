@@ -109,6 +109,9 @@ plt.grid(True)
 
 hpa = HeatPumpAnalysis()
 
+def quit():
+    exit(0)
+    
 def popupmsg(title, msg):
     
     popup = tk.Tk()
@@ -120,22 +123,6 @@ def popupmsg(title, msg):
     popup.mainloop()    
 
 def animate(i):
-#    dataLink = 'http://btc-e.com/api/3/trades/btc_usd?limit=2000'
-#    data = urllib.request.urlopen(dataLink)
-#    data = data.readall().decode("utf-8")
-#    data = json.loads(data)
-#    data = data["btc_usd"]
-#    data = pd.DataFrame(data)
-    
-#    buys = data[(data['type'] == "bid")]
-#    buys["datestamp"]=np.array(buys["timestamp"]).astype("datetime64[s]")
-#    buyDates = (buys["datestamp"]).tolist()
-#    buyPrices = (buys["price"]).tolist()
-    
-#    sells = data[(data['type'] == "ask")]
-#    sells["datestamp"]=np.array(sells["timestamp"]).astype("datetime64[s]")
-#    sellDates = (sells["datestamp"]).tolist()
-#    sellPrices = (sells["price"]).tolist()
 
     if len(hpa.HPChoice)>0 :
         hp = hpa.HPChoice[0]
@@ -155,7 +142,8 @@ def animate(i):
     
         a.legend(bbox_to_anchor=(0,0.92,1,.102),loc=3, ncol=4, borderaxespad=0)
         
-        title = "Heat Pump Performance for "+hp.Manufacturer + " Model " + hp.OutdoorUnit
+#        title = "Heat Pump Performance for "+hp.Manufacturer + " Model " + hp.OutdoorUnit
+        title = "Heat Pump Performance for "+hp.Brand + " Model " + hp.OutdoorUnit
         a.set_title(title)
         f.canvas.draw()
         
@@ -188,13 +176,15 @@ class HeatPumpPerformanceApp(tk.Tk):
         
         self.frames = {}
 
-        for F in (StartPage,HomePage, FuelDeliveryPage, BaselineHeatingPage, SelectHeatPumpPage,SupplementalHeatPage,GraphPage,EconomicsPage):
+        for F in (StartPage,HomePage, FuelDeliveryPage, BaselineHeatingPage,        
+                SelectHeatPumpPage,SupplementalHeatPage,FuelOptionsPage,GraphPage,EconomicsPage):
             
             frame = F(container,self)
             self.frames[F] = frame
             frame.grid(row=0,column=0,sticky="nsew")
             
         self.show_frame(StartPage)
+        self.lift()
         
     def show_frame(self,cont):
         frame = self.frames[cont]
@@ -235,8 +225,7 @@ def UpdateDeliveryHdrView(lb):
             hdrString = "\t\t"+hl[h]
             lb.insert(h,hl[h])
     else:
-        lb.insert(0,"\t\tNo delivery data entered")
-    
+        lb.insert(0,"\t\tNo delivery data entered")    
         
 def ClearDeliveryData(self,listbox):
     
@@ -278,13 +267,14 @@ def UpdateDeliveryGraph(self):
             fuel_required.append(hpa.purchase_Quantity[i]/months1)
             
         ta1 = []
-        ta1.append(tArray[0])
-        ta1.append(tArray[0])
-        ta1.append(tArray[-1])
         ma1 = []
-        ma1.append(0)
-        ma1.append(hpa.WaterHeatMonthlyUsage)    
-        ma1.append(hpa.WaterHeatMonthlyUsage)
+        if len(tArray)>0:
+            ta1.append(tArray[0])
+            ta1.append(tArray[0])
+            ta1.append(tArray[-1])
+            ma1.append(0)
+            ma1.append(hpa.WaterHeatMonthlyUsage)    
+            ma1.append(hpa.WaterHeatMonthlyUsage)
     
         a3.clear()
         a3.plot_date(tArray,fuel_required, "g", label = "Total monthly fuel consumption")   
@@ -323,7 +313,7 @@ class StartPage(tk.Frame) :
         button1.pack(pady=ys)
 
         def showLicense():
-            input = open("LICENSE")
+            input = open(hpa.workingDirectory+"/LICENSE")
             text = input.read()            
             popupmsg("License Information",text)
 
@@ -339,6 +329,11 @@ class StartPage(tk.Frame) :
 class HomePage(tk.Frame) :
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
+
+        self._First = True
+        self.controller = controller
+        
+    def LayoutFrame(self):
         
         label=ttk.Label(self,text="Home Page",font=LARGE_FONT)        
         label.pack(pady=10,padx=10)
@@ -350,19 +345,19 @@ class HomePage(tk.Frame) :
         text1=tk.Text(self,font=SMALL_FONT, height=30, width=150)
         text1.insert(END,"\nResults:\n")
         button1 = ttk.Button(self,width=26,text="Baseline Heating Scenario",
-                    command = lambda: controller.show_frame(BaselineHeatingPage))
+                    command = lambda: self.controller.show_frame(BaselineHeatingPage))
         button1.pack(pady=ys)
 
         button2 = ttk.Button(self,width=26,text="Fuel Purchase History",
-                    command = lambda: controller.show_frame(FuelDeliveryPage))
+                    command = lambda: self.controller.show_frame(FuelDeliveryPage))
         button2.pack(pady=ys)
 
         button3 = ttk.Button(self,width=26,text="Heat Pump System Options",
-                    command = lambda: controller.show_frame(SelectHeatPumpPage))
+                    command = lambda: self.controller.show_frame(SelectHeatPumpPage))
         button3.pack(pady=ys)
 
         button3s = ttk.Button(self,width=26,text="Supplemental Heat Options",
-                    command = lambda: controller.show_frame(SupplementalHeatPage))
+                    command = lambda: self.controller.show_frame(SupplementalHeatPage))
         button3s.pack(pady=ys)
 
         def doAnalysis():
@@ -374,15 +369,18 @@ class HomePage(tk.Frame) :
             if hpa.updateGraph:
                 animate(0)
                 
+        button4 = ttk.Button(self,width=26,text="Fuel Options",command = lambda:self.controller.show_frame(FuelOptionsPage) )
+        button4.pack(pady=ys)
+
         button4 = ttk.Button(self,width=26,text="Do Analysis",command = lambda: doAnalysis() )
         button4.pack(pady=ys)
 
         button5 = ttk.Button(self,width=26,text="Show Graph",
-                    command = lambda: controller.show_frame(GraphPage))
+                    command = lambda: self.controller.show_frame(GraphPage))
         button5.pack(pady=ys)
         
         button6 = ttk.Button(self,width=26,text="Economics",
-                    command = lambda: controller.show_frame(EconomicsPage))
+                    command = lambda: self.controller.show_frame(EconomicsPage))
         button6.pack(pady=ys)
         
         buttonQ = ttk.Button(self,width=26,text = "Quit", command = quit)
@@ -390,16 +388,33 @@ class HomePage(tk.Frame) :
 
         text1.pack()
 
+    def tkraise(self):
+        if self._First:
+            self.LayoutFrame()
+            self._First = False
+        tk.Frame.tkraise(self)
         
 class FuelDeliveryPage(tk.Frame):
 
     def tkraise(self):
+        if self._First:
+            self.LayoutFrame()
+            self._First = False
+            
         UpdateDeliveryGraph(self)
         tk.Frame.tkraise(self)
         
     def AddDelivery(self,listbox):
         # dialog to inquire date cost and volume
-        cd = CalendarDialog(self,month=self.lastmonth,year=self.lastyear)
+        
+        sel = listbox.curselection()
+        if len(sel)>0:
+            id = sel[0]        
+            date = hpa.purchase_Date[id]
+            self.lastmonth = date.month
+            self.lastyear = date.year
+            
+        cd = CalendarDialog(title="Select delivery date", month=self.lastmonth,year=self.lastyear)
         dDate=cd.result
         self.lastmonth=dDate.month
         self.lastyear=dDate.year
@@ -414,9 +429,9 @@ class FuelDeliveryPage(tk.Frame):
         
         # find location in list
         id = 0
-        for date in purchase_Date:
+        for date in hpa.purchase_Date:
             if date < dDate:
-                id = purchase_Date.index(date)+1
+                id = hpa.purchase_Date.index(date)+1
             
         # insert into lists
         hpa.AddDelivery(id,dDate,dCost,dAmount)
@@ -433,11 +448,37 @@ class FuelDeliveryPage(tk.Frame):
             date = hpa.purchase_Date[id]
             cost = hpa.purchase_Cost[id]
             amount = hpa.purchase_Quantity[id]
+        else:
+            popupmsg("Edit Delivery Date","Select entry from list to edit")
+            return
             
-            
+        self.lastmonth = date.month
+        self.lastyear = date.year
+
+        # todo : change calendar dialog to allow default date selection (not just month and year)
+        cd = CalendarDialog(title="Select delivery date", month=self.lastmonth,year=self.lastyear) # ,day=date.day)
+        dDate=cd.result
         # if date changed, get new index
+        if (dDate.month!=date.month or dDate.year != date.year or dDate.day!=date.day):
+            for newId in range(len(hpa.purchase_Date))-1:
+                nextDate = hpa.purchase_Date[newId+1]
+                pass
+                
+            # find new id
             # delete from existing loc, insert into new loc
+            return
+            
+            self.lastmonth=dDate.month
+            self.lastyear=dDate.year
         
+        dc=GetFloat("Enter $ cost (w/o $ sign)",default=self.lastcost)
+        dCost=dc.result
+        self.lastcost=dCost
+        
+        da=GetFloat("Enter amount",default=self.lastamount)
+        dAmount=da.result
+        self.lastamount=dAmount
+            
         # update entry in lists
         
         UpdateDeliveryDataView(listbox)
@@ -460,6 +501,10 @@ class FuelDeliveryPage(tk.Frame):
     def __init__(self,parent,controller):
         
         tk.Frame.__init__(self,parent)
+        self._First = True
+        self.controller = controller
+        
+    def LayoutFrame(self):
         label=ttk.Label(self,text="Fuel Deliveries Page",font=LARGE_FONT)        
         label.grid(row=0,column=0,columnspan=2,sticky=(E,W), pady=10,padx=10)
         
@@ -478,7 +523,7 @@ class FuelDeliveryPage(tk.Frame):
         button2.grid(row=8,column=1)
 
         button3 = ttk.Button(self,text="Save Delivery data",
-                    command = lambda: SaveDeliveriesDlg)
+                    command = lambda: SaveDeliveriesDlg(self))
         button3.grid(row=8,column=2)
 
         lbHdr = tk.Listbox(self,selectmode=tk.SINGLE,height=2,width=40)
@@ -488,7 +533,7 @@ class FuelDeliveryPage(tk.Frame):
         lbData.grid(row=4,column=0,columnspan=2, rowspan=4)
 
         button4 = ttk.Button(self,text="Done",
-                    command = lambda: controller.show_frame(HomePage))
+                    command = lambda: self.controller.show_frame(HomePage))
         button4.grid(row=9,column=1)
 
         button5 = ttk.Button(self,text="Add Delivery",
@@ -523,154 +568,22 @@ class FuelDeliveryPage(tk.Frame):
         self.lastcost=0.0
         self.lastamount=0.0
 
-class BaselineHeatingPage(tk.Frame):
+class FuelOptionsPage(tk.Frame):
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
-        label=ttk.Label(self,text="Baseline Heating Scenario: the exisiting system with the fuel consumption specified",font=LARGE_FONT)
-        label.grid(row=0,column=2,columnspan=3,pady=10,padx=10)
-  
-        label1=ttk.Label(self,text="Baseline heating system type, efficiency, and operating parameters",font=NORM_FONT)
-        label1.grid(row=1,column=2,columnspan=3,pady=20,padx=10)
-        
-        BLType = IntVar()
-        BLType.set(0)
-        
-        rb1 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_OIL, variable=BLType, value=0, command=lambda: hpa.SetBLScenario(0))
-        rb2 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_GAS, variable=BLType, value=1, command=lambda: hpa.SetBLScenario(1))
-        rb3 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_ELEC,variable=BLType, value=2, command=lambda: hpa.SetBLScenario(2))
-        rb4 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_LPG, variable=BLType, value=3, command=lambda: hpa.SetBLScenario(3))
-        rb5 = tk.Radiobutton(self, width=16, text="Other",           variable=BLType, value=4, command=lambda: hpa.SetBLScenario(4))
+        self._First = True
+        self.controller = controller
 
+    def tkraise(self):
+        if self._First:
+            self.LayoutFrame()
+            self._First = False
+        tk.Frame.tkraise(self)
+            
+    def LayoutFrame(self):
         ys = 5
-        rb1.grid(row=2,column=0,padx=20, pady = ys)
-        rb2.grid(row=3,column=0,padx=20, pady = ys)
-        rb3.grid(row=4,column=0,padx=20, pady = ys)
-        rb4.grid(row=5,column=0,padx=20, pady = ys)
-        rb5.grid(row=6,column=0,padx=20, pady = ys)
-        rb1.invoke()
-        
-        def getEfficiency(self):
-            s = GetInt("Enter system efficiency in %", default=100*hpa.BaseHvacEfficiency, min=10, max=100)
-            eff = s.result
-            try:
-                hpa.BaseHvacEfficiency = float(eff/100.)
-            except:
-                print("bad value")
-
-            e.config(text=eff)
-            e.update()
-
-        eff = '{0:2.1f}'.format(100.*hpa.BaseHvacEfficiency)
-        e = ttk.Label(self, width=5, text=eff)
-        e.grid(row=2, column=3, pady = ys)
-
-        btn1 =ttk.Button(self,text="System Efficiency",width=20,  command=lambda: getEfficiency(e))
-        btn1.grid(row=2,column=2,padx=10, pady = ys)
-
-        def setStartDate() :
-            cd = CalendarDialog(self,year=2012,month=7)
-            hpa.turn_ON_Date = datetime.date(cd.result.year, cd.result.month, cd.result.day)         
-            print (turn_ON_Date)
-        def setEndDate() :
-            cd = CalendarDialog(self)
-            hpa.turn_OFF_Date = datetime.date(cd.result.year, cd.result.month, cd.result.day)           
-            print (turn_OFF_Date)
-        def setTempSetPoint(e): 
-            s = GetFloat("Temperature set point", default=hpa.WinterBLSetPoint, min=50., max=90.)
-            weff = s.result
-            try:
-                hpa.WinterBLSetPoint = float(weff)
-            except:
-                print("bad value")
-
-            e.config(text=weff)
-            e.update()
-        def setACSetPoint(e): 
-            s = GetFloat("Temperature set point", default=hpa.SummerBLSetPoint, min=50., max=90.)
-            weff = s.result
-            try:
-                hpa.SummerBLSetPoint = float(weff)
-            except:
-                print("bad value")
-
-            e.config(text=weff)
-            e.update()
-            
-
-        label3=ttk.Label(self,text="Set Annual System Start/End Dates",font=SMALL_FONT)
-        label3.grid(row=3,column=2,columnspan=2,padx=10, pady = ys)
-            
-        button2 = ttk.Button(self,text="Start Date",width=20, 
-                    command = setStartDate)
-        button2.grid(row=4,column=2, pady = ys)
-
-        labelSD = ttk.Label(self,text=hpa.turn_ON_Date)
-        labelSD.grid(row=4,column=3, pady = ys)
-        
-        button3 = ttk.Button(self,text="End Date",width=20, 
-                    command = setEndDate)
-        button3.grid(row=5,column=2, pady = ys)
-
-        labelED = ttk.Label(self,text=hpa.turn_OFF_Date)
-        labelED.grid(row=5,column=3, pady = ys)
-
-        label3=ttk.Label(self,text="Thermostat set point",font=SMALL_FONT)
-        label3.grid(row=3,column=4,columnspan=2,padx=10, pady = ys)
-            
-        labelT = ttk.Label(self,text=str(hpa.WinterBLSetPoint))
-        button2a = ttk.Button(self,text="Temperature",width=15, 
-                    command = lambda: setTempSetPoint(labelT))
-        button2a.grid(row=4,column=4, pady = ys)
-        labelT.grid(row=4,column=5, pady = ys)
-        labelTs = ttk.Label(self,text="deg F")
-        labelTs.grid(row=4,column=6, pady = ys)
-
-        
-        labelW=ttk.Label(self,text="Baseline hot water type parameters",font=NORM_FONT)
-        labelW.grid(row=10,column=2,columnspan=2,pady=20,padx=10)
-
-        def getWaterUse(e):
-            s = GetFloat("Estimate monthly heat units for water", default=hpa.WaterHeatMonthlyUsage, min=0.)
-            weff = s.result
-            try:
-                hpa.WaterHeatMonthlyUsage = float(weff)
-            except:
-                print("bad value")
-
-            e.config(text=weff)
-            e.update()
-
-        btnTxt = "Estimated monthly " + hpa.WaterEnergyUnits
-
-        weff = '{0:.0f}'.format(hpa.WaterHeatMonthlyUsage)
-        ew = ttk.Label(self, width=5, text=weff)
-        ew.grid(row=12, column=3)
-        btn1 =ttk.Button(self,text=btnTxt, width=20, command=lambda: getWaterUse(ew))
-        btn1.grid(row=12,column=2)
-
-        def setBLW(type):
-            hpa.SetBLWScenario(type)
-            btt = "Estimated Monthly %s" % (hpa.WaterEnergyUnits)
-            btn1.config(text=btt)
-            btn1.update()
-            ett = "%.1f" % (hpa.WaterHeatMonthlyUsage)
-            ew.config(text=ett)
-            ew.update()
-
-        BLWType = IntVar()
-        BLWType.set(0)
-        rbw1 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_OIL, variable=BLWType, value=0, command=lambda: setBLW(0))
-        rbw2 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_GAS, variable=BLWType, value=1, command=lambda: setBLW(1))
-        rbw3 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_ELEC,variable=BLWType, value=2, command=lambda: setBLW(2))
-        rbw4 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_LPG, variable=BLWType, value=3, command=lambda: setBLW(3))
-        rbw1.grid(row=12,column=0,padx=20, pady = ys)
-        rbw2.grid(row=13,column=0,padx=20, pady = ys)
-        rbw3.grid(row=14,column=0,padx=20, pady = ys)
-        rbw4.grid(row=15,column=0,padx=20, pady = ys)
-        rbw1.invoke()
-
         labelW=ttk.Label(self,text="Standard unit prices",font=NORM_FONT)
-        labelW.grid(row=10,column=4,columnspan=3,pady=20,padx=10)
+        labelW.grid(row=1,column=4,columnspan=3,pady=20,padx=10)
 
         def setStandardPrice(fuel, e):
             if fuel==0:
@@ -704,32 +617,193 @@ class BaselineHeatingPage(tk.Frame):
         p2 = "$%.3f" % hpa.STANDARD_PRICE_ELEC
         p3 = "$%.2f" % hpa.STANDARD_PRICE_LPG
         en0 = ttk.Label(self,text=p0,width=6)
-        en0.grid(row=12,column=5, pady = ys)
+        en0.grid(row=2,column=5, pady = ys)
         en1 = ttk.Label(self,text=p1,width=6)
-        en1.grid(row=13,column=5, pady = ys)
+        en1.grid(row=3,column=5, pady = ys)
         en2 = ttk.Label(self,text=p2,width=6)
-        en2.grid(row=14,column=5, pady = ys)
+        en2.grid(row=4,column=5, pady = ys)
         en3 = ttk.Label(self,text=p3,width=6)
-        en3.grid(row=15,column=5, pady = ys)
+        en3.grid(row=5,column=5, pady = ys)
 
         bt0 = ttk.Button(self,text=hpa.HEAT_NAME_OIL, width=15, command = lambda: setStandardPrice(0,en0))
-        bt0.grid(row=12,column=4, pady = ys)
+        bt0.grid(row=2,column=4, pady = ys)
         bt1 = ttk.Button(self,text=hpa.HEAT_NAME_GAS, width=15, command = lambda: setStandardPrice(1,en1))
-        bt1.grid(row=13,column=4, pady = ys)
+        bt1.grid(row=3,column=4, pady = ys)
         bt2 = ttk.Button(self,text=hpa.HEAT_NAME_ELEC,width=15, command = lambda: setStandardPrice(2,en2))
-        bt2.grid(row=14,column=4, pady = ys)
+        bt2.grid(row=4,column=4, pady = ys)
         bt3 = ttk.Button(self,text=hpa.HEAT_NAME_LPG, width=15, command = lambda: setStandardPrice(3,en3))
-        bt3.grid(row=15,column=4, pady = ys)
+        bt3.grid(row=5,column=4, pady = ys)
 
         eu0 = ttk.Label(self,text="per "+hpa.UNITS_OIL,width=10)
-        eu0.grid(row=12,column=6, pady = ys)
+        eu0.grid(row=2,column=6, pady = ys)
         eu1 = ttk.Label(self,text="per "+hpa.UNITS_GAS,width=10)
-        eu1.grid(row=13,column=6, pady = ys)
+        eu1.grid(row=3,column=6, pady = ys)
         eu2 = ttk.Label(self,text="per "+hpa.UNITS_ELEC,width=10)
-        eu2.grid(row=14,column=6, pady = ys)
+        eu2.grid(row=4,column=6, pady = ys)
         eu3 = ttk.Label(self,text="per "+hpa.UNITS_LPG,width=10)
-        eu3.grid(row=15,column=6, pady = ys)
-         
+        eu3.grid(row=5,column=6, pady = ys)
+
+        button4 = ttk.Button(self,text="Done",
+                    command = lambda: self.controller.show_frame(HomePage))
+        button4.grid(row=9,column=6)
+
+    
+class BaselineHeatingPage(tk.Frame):
+    def __init__(self,parent,controller):
+        tk.Frame.__init__(self,parent)
+        self._First = True
+        self.controller = controller
+
+    def tkraise(self):
+        if self._First:
+            self.LayoutFrame()
+            self._First = False
+        tk.Frame.tkraise(self)
+            
+    def LayoutFrame(self):
+        label=ttk.Label(self,text="Baseline Heating Scenario: the exisiting system with the fuel consumption specified",font=LARGE_FONT)
+        label.grid(row=0,column=2,columnspan=3,pady=10,padx=10)
+  
+        label1=ttk.Label(self,text="Baseline heating system type, efficiency, and operating parameters",font=NORM_FONT)
+        label1.grid(row=1,column=2,columnspan=3,pady=20,padx=10)
+        
+        BLType = IntVar()
+        BLType.set(0)
+        
+        rb1 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_OIL, variable=BLType, value=0, command=lambda: hpa.SetBLScenario(0))
+        rb2 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_GAS, variable=BLType, value=1, command=lambda: hpa.SetBLScenario(1))
+        rb3 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_ELEC,variable=BLType, value=2, command=lambda: hpa.SetBLScenario(2))
+        rb4 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_LPG, variable=BLType, value=3, command=lambda: hpa.SetBLScenario(3))
+        rb5 = tk.Radiobutton(self, width=16, text="Other",           variable=BLType, value=4, command=lambda: hpa.SetBLScenario(4))
+
+        ys = 5
+        rb1.grid(row=2,column=0,padx=20, pady = ys)
+        rb2.grid(row=3,column=0,padx=20, pady = ys)
+        rb3.grid(row=4,column=0,padx=20, pady = ys)
+        rb4.grid(row=5,column=0,padx=20, pady = ys)
+        rb5.grid(row=6,column=0,padx=20, pady = ys)
+        rb1.invoke()
+        
+        def getEfficiency(self):
+            s = GetFloat("Enter system efficiency in %", default=100*hpa.BaseHvacEfficiency, min=10., max=100.)
+            eff = s.result
+            try:
+                hpa.BaseHvacEfficiency = float(eff/100.)
+            except:
+                print("bad value")
+
+            e.config(text=eff)
+            e.update()
+
+        eff = '{0:2.1f}'.format(100.*hpa.BaseHvacEfficiency)
+        e = ttk.Label(self, width=5, text=eff)
+        e.grid(row=2, column=3, pady = ys)
+
+        btn1 =ttk.Button(self,text="System Efficiency",width=20,  command=lambda: getEfficiency(e))
+        btn1.grid(row=2,column=2,padx=10, pady = ys)
+
+        def setStartDate(e) :
+            cd = CalendarDialog(self,year=2012,month=7)
+            hpa.turn_ON_Date = datetime.date(cd.result.year, cd.result.month, cd.result.day)         
+            e.config(text=hpa.turn_ON_Date)
+        def setEndDate(e) :
+            cd = CalendarDialog(self)
+            hpa.turn_OFF_Date = datetime.date(cd.result.year, cd.result.month, cd.result.day)           
+            e.config(text=hpa.turn_OFF_Date)
+
+        def setTempSetPoint(e): 
+            s = GetFloat("Temperature set point", default=hpa.WinterBLSetPoint, min=50., max=90.)
+            weff = s.result
+            try:
+                hpa.WinterBLSetPoint = float(weff)
+            except:
+                print("bad value")
+
+            e.config(text=weff)
+            e.update()
+        def setACSetPoint(e): 
+            s = GetFloat("Temperature set point", default=hpa.SummerBLSetPoint, min=50., max=90.)
+            weff = s.result
+            try:
+                hpa.SummerBLSetPoint = float(weff)
+            except:
+                print("bad value")
+
+            e.config(text=weff)
+            e.update()
+            
+
+        label3=ttk.Label(self,text="Set Annual System Start/End Dates",font=SMALL_FONT)
+        label3.grid(row=3,column=2,columnspan=2,padx=10, pady = ys)
+            
+        labelSD = ttk.Label(self,text=hpa.turn_ON_Date)
+        labelSD.grid(row=4,column=3, pady = ys)
+        
+        button2 = ttk.Button(self,text="Start Date",width=20, command = lambda: setStartDate(labelSD))
+        button2.grid(row=4,column=2, pady = ys)
+
+        labelED = ttk.Label(self,text=hpa.turn_OFF_Date)
+        labelED.grid(row=5,column=3, pady = ys)
+
+        button3 = ttk.Button(self,text="End Date",width=20, command = lambda: setEndDate(labelED))
+        button3.grid(row=5,column=2, pady = ys)
+
+        label3=ttk.Label(self,text="Thermostat set point",font=SMALL_FONT)
+        label3.grid(row=3,column=4,columnspan=2,padx=10, pady = ys)
+            
+        labelT = ttk.Label(self,text=str(hpa.WinterBLSetPoint))
+        button2a = ttk.Button(self,text="Temperature",width=15, 
+                    command = lambda: setTempSetPoint(labelT))
+        button2a.grid(row=4,column=4, pady = ys)
+        labelT.grid(row=4,column=5, pady = ys)
+        labelTs = ttk.Label(self,text="deg F")
+        labelTs.grid(row=4,column=6, pady = ys)
+
+        
+        labelW=ttk.Label(self,text="Baseline hot water type parameters",font=NORM_FONT)
+        labelW.grid(row=10,column=2,columnspan=2,pady=20,padx=10)
+
+        def getWaterUse(e):
+            s = GetFloat("Estimate monthly heat units for water", default=hpa.WaterHeatMonthlyUsage, min=0.)
+            weff = s.result
+            try:
+                hpa.WaterHeatMonthlyUsage = float(weff)
+            except:
+                print("bad value")
+
+            e.config(text=weff)
+            e.update()
+
+        btnTxt = "Estimated monthly " + hpa.WaterEnergyUnits
+
+#        weff = '{0:.0f}'.format(hpa.WaterHeatMonthlyUsage)
+        weff = '%.1f' % hpa.WaterHeatMonthlyUsage
+        ew = ttk.Label(self, width=5, text=weff)
+        ew.grid(row=12, column=3)
+        btn1 =ttk.Button(self,text=btnTxt, width=20, command=lambda: getWaterUse(ew))
+        btn1.grid(row=12,column=2)
+
+        def setBLW(type):
+            hpa.SetBLWScenario(type)
+            btt = "Estimated Monthly %s" % (hpa.WaterEnergyUnits)
+            btn1.config(text=btt)
+            btn1.update()
+            ett = "%.1f" % (hpa.WaterHeatMonthlyUsage)
+            ew.config(text=ett)
+            ew.update()
+
+        BLWType = IntVar()
+        BLWType.set(0)
+        rbw1 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_OIL, variable=BLWType, value=0, command=lambda: setBLW(0))
+        rbw2 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_GAS, variable=BLWType, value=1, command=lambda: setBLW(1))
+        rbw3 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_ELEC,variable=BLWType, value=2, command=lambda: setBLW(2))
+        rbw4 = tk.Radiobutton(self, width=16, text=hpa.HEAT_NAME_LPG, variable=BLWType, value=3, command=lambda: setBLW(3))
+        rbw1.grid(row=12,column=0,padx=20, pady = ys)
+        rbw2.grid(row=13,column=0,padx=20, pady = ys)
+        rbw3.grid(row=14,column=0,padx=20, pady = ys)
+        rbw4.grid(row=15,column=0,padx=20, pady = ys)
+        rbw1.invoke()
+
 
         labelAC=ttk.Label(self,text="Baseline air conditioning parameters",font=NORM_FONT)
         labelAC.grid(row=20,column=2,columnspan=3,pady=20,padx=10)
@@ -777,7 +851,7 @@ class BaselineHeatingPage(tk.Frame):
         labelTd.grid(row=23,column=6, pady = ys)
 
         button4 = ttk.Button(self,text="Done",width=20, 
-                    command = lambda: controller.show_frame(HomePage))
+                    command = lambda: self.controller.show_frame(HomePage))
         button4.grid(row=30, column=2,pady=30)
 
 def selHeatPump(H,info):
@@ -805,7 +879,8 @@ def selHeatPump(H,info):
     a1.set_ylim(ymin=0.,ymax=6.)
     a1.legend(bbox_to_anchor=(0,0.80,1,.1),loc=3, ncol=3, borderaxespad=0)
         
-    title = "COP for " + heatPump.Manufacturer +" Model " + heatPump.OutdoorUnit
+#    title = "COP for " + heatPump.Manufacturer +" Model " + heatPump.OutdoorUnit
+    title = "COP for " + heatPump.Brand +" Model " + heatPump.OutdoorUnit
     a1.set_title(title)
 
     a2.clear()
@@ -838,20 +913,34 @@ def updateHeatPumpInfo(info):
     ### update text box with chosen heat pump information"""
     infoText = ""
     for hp in hpa.HPChoice:
-        infoText+= hp.Manufacturer + "-" + hp.OutdoorUnit + "," + hp.DuctedDuctless + "\n"
+        infoText+= hp.Brand + "-" + hp.OutdoorUnit + "," + hp.DuctedDuctless + "\n"
+#        infoText+= hp.Manufacturer + "-" + hp.OutdoorUnit + "," + hp.DuctedDuctless + "\n"
         
     info.config(text=infoText)
     info.update()
         
 class SelectHeatPumpPage(tk.Frame):
     def __init__(self,parent,controller):
+        tk.Frame.__init__(self,parent)
+        self._First = True
+        self.controller = controller
+
+    def tkraise(self):
+        if self._First:
+            self.LayoutFrame()
+            self._First = False
+        tk.Frame.tkraise(self)
+            
+    def LayoutFrame(self):
         HPFilter = ['Ductless','Ducted','All']
 
         HPListIndex2ID = []
         
-        tk.Frame.__init__(self,parent)
         label=ttk.Label(self,text="\tHeat Pump Selection Page: View parameters for NEEP recommended cold climate heat pumps\n",font=LARGE_FONT)
         label.grid(row=0,column=0,columnspan=5, sticky=(W,E))
+
+#        Would like to have a manufacturers list box, and filter the heatpump models offered by that manufacturer
+#        lbM = tk.Listbox(self,selectmode=tk.SINGLE,height=15,width=15)        
 
         lb = tk.Listbox(self,selectmode=tk.SINGLE,height=15,width=50)
 
@@ -867,7 +956,8 @@ class SelectHeatPumpPage(tk.Frame):
             for hp in hpa.HPList:
                 ductless = (hp.DuctedDuctless == 'Ductless')
                 if ( (ductless and (filter=='Ductless' or filter=='All')) or ((not ductless) and (filter != 'Ductless'))) :
-                    insertText = hp.Manufacturer + " Model " + hp.OutdoorUnit + " " + hp.DuctedDuctless
+                    insertText = hp.Brand + " Model " + hp.OutdoorUnit + " " + hp.DuctedDuctless
+#                    insertText = hp.Manufacturer + " Model " + hp.OutdoorUnit + " " + hp.DuctedDuctless
                     if hp.DuctedDuctless == 'Ductless': insertText+='-' + hp.Zones
                         
                     lb.insert(h,insertText)
@@ -970,12 +1060,22 @@ class SelectHeatPumpPage(tk.Frame):
 
         text3.grid(row=7,column=2,columnspan=3,sticky=(N,E,W))
        
-        button4 = ttk.Button(self,text="Done", width=20, command = lambda: controller.show_frame(HomePage))
+        button4 = ttk.Button(self,text="Done", width=20, command = lambda: self.controller.show_frame(HomePage))
         button4.grid(row=10,column=2, pady=30)        
 
 class SupplementalHeatPage(tk.Frame):
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
+        self._First = True
+        self.controller = controller
+
+    def tkraise(self):
+        if self._First:
+            self.LayoutFrame()
+            self._First = False
+        tk.Frame.tkraise(self)
+            
+    def LayoutFrame(self):
 
         label=ttk.Label(self,text="Supplemental Heating System: back up heating system for coldest days",font=LARGE_FONT)
         label.grid(row=0,column=2,columnspan=3,pady=10,padx=10)
@@ -1001,7 +1101,7 @@ class SupplementalHeatPage(tk.Frame):
         rb1.invoke()
         
         def getEfficiency(e):
-            s = GetInt("Enter system efficiency in %", default=100*hpa.SuppHvacEfficiency, min=10, max=100)
+            s = GetFloat("Enter system efficiency in %", default=100*hpa.SuppHvacEfficiency, min=10, max=100)
             eff = s.result
             try:
                 hpa.SuppHvacEfficiency = float(eff/100.)
@@ -1035,18 +1135,28 @@ class SupplementalHeatPage(tk.Frame):
         btn1 =ttk.Button(self,text="Outdoor Temp Enable",width=20,  command=lambda: getOTNABL(e1))
         btn1.grid(row=4,column=2,padx=10, pady = ys)
        
-        button4 = ttk.Button(self,text="Done", width=20, command = lambda: controller.show_frame(HomePage))
+        button4 = ttk.Button(self,text="Done", width=20, command = lambda: self.controller.show_frame(HomePage))
         button4.grid(row=10,column=2, pady=30)        
 
 class GraphPage(tk.Frame):
     def __init__(self,parent,controller):
         tk.Frame.__init__(self,parent)
         
+        self._First = True
+        self.controller = controller
+
+    def tkraise(self):
+        if self._First:
+            self.LayoutFrame()
+            self._First = False
+        tk.Frame.tkraise(self)
+            
+    def LayoutFrame(self):
         label=ttk.Label(self,text="Heat Pump Graph",font=LARGE_FONT)        
         label.pack(pady=10,padx=10)
         
         button1 = ttk.Button(self,text="Done",
-                    command = lambda: controller.show_frame(HomePage))
+                    command = lambda: self.controller.show_frame(HomePage))
         button1.pack()
         
         canvas = FigureCanvasTkAgg(f,self)
@@ -1119,7 +1229,7 @@ class EconomicsPage(tk.Frame):
                 AlternativeEmissions += WaterAverageUnits*hpa.WaterKgCO2PerUnit*.001
                 
             if BLAC:
-                AlternativeEmissions += BLACAverageUnits*hpa.ElecKgCO2PerUnit*.001
+                AlternativeEmissions += hpa.BLACAverageUnits*hpa.ElecKgCO2PerUnit*.001
             
             HeatPumpCost += HeatPumpOperatingCost + SupplementalOperatingCost + HeatPumpFinancingCost
             AlternativeCost += AlternativeOperatingCost
@@ -1153,11 +1263,20 @@ class EconomicsPage(tk.Frame):
         a4.set_title(title)
         f4.canvas.draw()
         
-    def tkraise(self):
+    def __init__(self,parent,controller):
+        tk.Frame.__init__(self,parent)
+        self._First = True
+        self.controller = controller
 
+    def tkraise(self):
+        if self._First:
+            self.LayoutFrame()
+            self._First = False
+ 
         hpNames = ""
         for hp in hpa.HPChoice :
-            hpNames += hp.Manufacturer+'-'+hp.OutdoorUnit+"-"+hp.IndoorUnits+","
+            hpNames += hp.Brand+'-'+hp.OutdoorUnit+"-"+hp.IndoorUnits+","
+#            hpNames += hp.Manufacturer+'-'+hp.OutdoorUnit+"-"+hp.IndoorUnits+","
             self.elabel.config(text=hpNames)
             self.elabel.update()
         
@@ -1175,10 +1294,8 @@ class EconomicsPage(tk.Frame):
         self.UpdatePaybackData()
         
         tk.Frame.tkraise(self)
-        
-
-    def __init__(self,parent,controller):
-        tk.Frame.__init__(self,parent)
+                    
+    def LayoutFrame(self):
         
         label=ttk.Label(self,text="Economic Payback Calculation",font=LARGE_FONT)        
         label.grid(row = 0, column = 2, columnspan=2, pady=10,padx=10)
@@ -1457,7 +1574,6 @@ class EconomicsPage(tk.Frame):
         asy.grid(row=8, column=5)
 
 
-
         self.textPaybackData = ttk.Label(self,text='',width=60, font=NORM_FONT)
         self.textPaybackData.grid(row=20,rowspan=2,column=0,columnspan=3, pady=10)
 
@@ -1468,7 +1584,7 @@ class EconomicsPage(tk.Frame):
         canvas.get_tk_widget().grid(column=3, columnspan=3, row=20)  #fill=tk.BOTH,,pady=10
         
         button10 = ttk.Button(self,text="Done",
-                    command = lambda: controller.show_frame(HomePage))
+                    command = lambda: self.controller.show_frame(HomePage))
         button10.grid(row=0, column=4)
     
 hpa.loadHeatPumps()
