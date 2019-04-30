@@ -1,21 +1,25 @@
 
+# 7/19/17 BHN:  Updated to ColdClimateAir=SourceHeatPumpSpecificationListing 7.14.17
 
 class HeatPump :
     """Data and methods for calculation of heat pump parameters"""
-    def __init__(self, Manufacturer, Brand, AHRICertNumber, OutdoorUnit,IndoorUnits,VariableSpeed,HSPFregIV,SEER,EER_95,EnergyStar, DuctedDuctless,Zones) :
+    def __init__(self, Manufacturer, Brand, ModelName, AHRICertNumber, OutdoorUnit,IndoorUnits,AHRIType,HSPFregIV,SEER,EER_95,CoolingCapacity, EnergyStar, DuctedDuctless,Zones,DuctlessIndoorType) :
 
         self.Manufacturer=Manufacturer
         self.Brand=Brand
+        self.ModelName=ModelName
         self.AHRICertNumber=AHRICertNumber
         self.OutdoorUnit=OutdoorUnit
         self.IndoorUnits=IndoorUnits
-        self.VariableSpeed=VariableSpeed
+        self.AHRIType=AHRIType
         self.HSPFregIV=HSPFregIV
         self.SEER=SEER
         self.EER_95=EER_95
+        self.CoolingCapacity = CoolingCapacity
         self.EnergyStar=EnergyStar
         self.DuctedDuctless=DuctedDuctless
-        self.Zones=Zones 
+        self.Zones=Zones
+        self.DuctlessIndoorType = DuctlessIndoorType
         
         self.tData = []
         self.CAPMin = []
