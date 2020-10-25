@@ -36,7 +36,7 @@
 # matplotlib figure plotting library
 import matplotlib
 matplotlib.use("TkAgg")
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg,NavigationToolbar2TkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg,NavigationToolbar2Tk
 #from matplotlib.figure import Figure
 import matplotlib.animation as animation
 from matplotlib import style
@@ -556,7 +556,7 @@ class FuelDeliveryPage(tk.Frame):
         button8.grid(row=2,column=2)
  
         canvas = FigureCanvasTkAgg(f3,self)
-        canvas.show()
+        canvas.draw()
         canvas.get_tk_widget().grid(column=3, columnspan=3, row=4, rowspan=4)  #fill=tk.BOTH,,pady=10
        
         UpdateDeliveryHdrView(lbHdr)    
@@ -978,7 +978,7 @@ class SelectHeatPumpPage(tk.Frame):
         lb.activate(0)
         
         canvas = FigureCanvasTkAgg(f1,self)
-        canvas.show()
+        canvas.draw()
         canvas.get_tk_widget().grid(column=3, columnspan=3, row=1, rowspan=4)  #fill=tk.BOTH,,pady=10
 
         text1 = ttk.Label(self,text='Selected Heat Pump System',font=NORM_FONT)
@@ -1160,10 +1160,10 @@ class GraphPage(tk.Frame):
         button1.pack()
         
         canvas = FigureCanvasTkAgg(f,self)
-        canvas.show()
+        canvas.draw()
         canvas.get_tk_widget().pack(side=tk.TOP,fill=tk.BOTH,expand=True)
         
-        toolbar = NavigationToolbar2TkAgg(canvas,self)
+        toolbar = NavigationToolbar2Tk(canvas,self)
         toolbar.update()
         canvas._tkcanvas.pack(side=tk.TOP,fill=tk.BOTH,expand=True)
 
@@ -1580,7 +1580,7 @@ class EconomicsPage(tk.Frame):
         self.UpdatePaybackData()
         
         canvas = FigureCanvasTkAgg(f4,self)
-        canvas.show()
+        canvas.draw()
         canvas.get_tk_widget().grid(column=3, columnspan=3, row=20)  #fill=tk.BOTH,,pady=10
         
         button10 = ttk.Button(self,text="Done",

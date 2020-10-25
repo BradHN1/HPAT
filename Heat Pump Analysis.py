@@ -735,7 +735,8 @@ def LoadTempDataRaw(status, year=0):
     # loop over files from these years
     ClimaticDataPath = './Climate Data/KBED'
     for year in range(yearStart,yearEnd+1):
-        filename = "%s-%i.txt" % (ClimaticDataPath, year) 
+        #filename = "%s-%i.txt" % (ClimaticDataPath, year) 
+        filename = "%s-%i.csv" % (ClimaticDataPath, year) 
         print("Reading "+filename)
         
         status.config(text="Loading temperature data from: "+filename)
@@ -745,26 +746,31 @@ def LoadTempDataRaw(status, year=0):
         nextHour = datetime.datetime(year,1,1,0,0)
         for line in open(filename,'r',encoding='latin-1'):
             LN+=1
-            if LN==0: 
+            #if LN==0: 
+            if LN<8 
                 continue
-            tokens = line.rstrip().split('\t')
+            #tokens = line.rstrip().split('\t')
+            tokens = line.rstrip().split(',')
             if len(tokens)<1:
                 print("len(tokens)<1") 
                 break
             try:
-                datestring = tokens[0]
+                #datestring = tokens[0]
+                datestring = tokens[1]
                 if datestring.find('-') == 1 : 
                     datestring = "0"+datestring
                 if datestring.find('-',3,5) == 4 :
                     datestring = datestring[0:3]+"0"+datestring[3:]
                 if datestring.find(':') == 12 :
                     datestring = datestring[0:11]+"0"+datestring[11:]
-                dateTime = datetime.datetime.strptime(datestring[0:-4], "%m-%d-%Y %H:%M")
+                dateTime = datetime.datetime.strptime(datestring[0:-4], "%m/%d/%Y %H:%M")
+                if LN==8:
+                    print(dateTime)
             except:     # hit the line past the date lines
                 break
 
             try:
-                temp = float(tokens[1])
+                temp = float(tokens[2])
             except:
                 pass
                 
